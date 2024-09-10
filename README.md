@@ -1,4 +1,4 @@
-# Fingerprint library for crystal structures
+# SHAPE (Symmetry-guided Hyperspace Accelerated Potential Energy exploration)
 ### Implemented in Python3
 
 ## Dependencies
