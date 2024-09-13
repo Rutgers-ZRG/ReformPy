@@ -1,4 +1,7 @@
-# SHAPE (Symmetry-guided Hyperspace Accelerated Potential Energy exploration)
+# SHAPE 
+
+**Symmetry-guided Hyperspace Accelerated Potential Energy exploration**
+
 ### Implemented in Python3
 
 ## Dependencies
