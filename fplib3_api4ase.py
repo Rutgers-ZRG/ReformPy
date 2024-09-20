@@ -1,5 +1,6 @@
 import numpy as np
 import fplib3
+import fplib
 import ase.io
 from ase.atoms import Atoms
 from ase.calculators.calculator import Calculator
@@ -333,13 +334,15 @@ class fp_GD_Calculator(Calculator):
             nx = np.int32(nx)
             lmax = np.int32(lmax)
             cutoff = np.float64(cutoff)
-            fp, _ = fplib3.get_fp(lat, rxyz, types, znucl,
-                                  contract = contract,
-                                  ldfp = False,
-                                  ntyp = ntyp,
-                                  nx = nx,
-                                  lmax = lmax,
-                                  cutoff = cutoff)
+            # fp, _ = fplib3.get_fp(lat, rxyz, types, znucl,
+            #                       contract = contract,
+            #                       ldfp = False,
+            #                       ntyp = ntyp,
+            #                       nx = nx,
+            #                       lmax = lmax,
+            #                       cutoff = cutoff)
+            cell = (lat, rxyz, types, znucl)
+            fp = fplib.get_lfp(cell, cutoff = cutoff, log = False, natx = nx)
             fp = np.float64(fp)
             fpe = fplib3.get_fpe(fp, ntyp = ntyp, types = types)
             self._energy = fpe
@@ -369,13 +372,15 @@ class fp_GD_Calculator(Calculator):
             nx = np.int32(nx)
             lmax = np.int32(lmax)
             cutoff = np.float64(cutoff)
-            fp, dfp = fplib3.get_fp(lat, rxyz, types, znucl,
-                                    contract = contract,
-                                    ldfp = True,
-                                    ntyp = ntyp,
-                                    nx = nx,
-                                    lmax = lmax,
-                                    cutoff = cutoff)
+            # fp, dfp = fplib3.get_fp(lat, rxyz, types, znucl,
+            #                         contract = contract,
+            #                         ldfp = True,
+            #                         ntyp = ntyp,
+            #                         nx = nx,
+            #                         lmax = lmax,
+            #                         cutoff = cutoff)
+            cell = (lat, rxyz, types, znucl)
+            fp, dfp  = fplib.get_dfp(cell, cutoff=cutoff, log=False, natx = nx)
             fp = np.float64(fp)
             dfp = np.array(dfp, dtype = np.float64)
             fpe, fpf = fplib3.get_ef(fp, dfp, ntyp = ntyp, types = types)
@@ -408,12 +413,15 @@ class fp_GD_Calculator(Calculator):
             nx = np.int32(nx)
             lmax = np.int32(lmax)
             cutoff = np.float64(cutoff)
-            stress = fplib3.get_stress(lat, rxyz, types, znucl,
-                                       contract = contract,
-                                       ntyp = ntyp,
-                                       nx = nx,
-                                       lmax = lmax,
-                                       cutoff = cutoff)
+            # forces = self._forces
+            forces=atoms.get_forces()
+            stress = fplib3.get_stress(lat, rxyz, forces)
+            # stress = fplib3.get_stress(lat, rxyz, types, znucl,
+            #                            contract = contract,
+            #                            ntyp = ntyp,
+            #                            nx = nx,
+            #                            lmax = lmax,
+            #                            cutoff = cutoff)
             self._stress = stress
         return self._stress
     
@@ -475,6 +483,8 @@ class fp_GD_Calculator(Calculator):
             print("Force consistency test passed!")
         else:
             print("Force consistency test failed!")
+    
+   
 
 ########################################################################################
 ####################### Helper functions for the VASP calculator #######################
