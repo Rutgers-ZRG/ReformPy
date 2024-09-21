@@ -382,7 +382,7 @@ class fp_GD_Calculator(Calculator):
             #                         lmax = lmax,
             #                         cutoff = cutoff)
             cell = (lat, rxyz, types, znucl)
-            fp, dfp  = fplib.get_dfp(cell, cutoff=cutoff, log=False, natx = nx)
+            fp, dfp  = fplib.get_dfp(cell, cutoff = cutoff, log = False, natx = nx)
             fp = np.float64(fp)
             dfp = np.array(dfp, dtype = np.float64)
             fpe, fpf = fplib3.get_ef(fp, dfp, ntyp = ntyp, types = types)
@@ -448,15 +448,59 @@ class fp_GD_Calculator(Calculator):
         nx = np.int32(nx)
         lmax = np.int32(lmax)
         cutoff = np.float64(cutoff)
-        del_fpe, e_diff = fplib3.get_simpson_energy(lat, rxyz, types, znucl,
-                                                    contract = contract,
-                                                    ntyp = ntyp,
-                                                    nx = nx,
-                                                    lmax = lmax,
-                                                    cutoff = cutoff)
+        # del_fpe, e_diff = fplib3.get_simpson_energy(lat, rxyz, types, znucl,
+        #                                             contract = contract,
+        #                                             ntyp = ntyp,
+        #                                             nx = nx,
+        #                                             lmax = lmax,
+        #                                             cutoff = cutoff)
+        
+        
+        rxyz_delta = np.zeros_like(rxyz)
+        rxyz_disp = np.zeros_like(rxyz)
+        rxyz_left = np.zeros_like(rxyz)
+        rxyz_mid = np.zeros_like(rxyz)
+        rxyz_right = np.zeros_like(rxyz)
+        nat = len(rxyz)
+        del_fpe = 0.0
+        iter_max = 100
+        step_size = 1.e-5
+        rxyz_delta = step_size*( np.random.rand(nat, 3).astype(np.float64) - \
+                                0.5*np.ones((nat, 3), dtype = np.float64) )
+        
+        for i_iter in range(iter_max):
+            rxyz_disp += 2.0*rxyz_delta
+            rxyz_left = rxyz.copy() + 2.0*i_iter*rxyz_delta
+            rxyz_mid = rxyz.copy() + 2.0*(i_iter+1)*rxyz_delta
+            rxyz_right = rxyz.copy() + 2.0*(i_iter+2)*rxyz_delta
+            
+            fp_left, dfp_left = fplib.get_dfp((lat, rxyz_left, types, znucl),
+                                              cutoff = cutoff, log = False, natx = nx)
+            fp_mid, dfp_mid = fplib.get_dfp((lat, rxyz_mid, types, znucl),
+                                              cutoff = cutoff, log = False, natx = nx)
+            fp_right, dfp_right = fplib.get_dfp((lat, rxyz_right, types, znucl),
+                                              cutoff = cutoff, log = False, natx = nx)
+            fpe_left, fpf_left = fplib3.get_ef(fp_left, dfp_left, ntyp, types)
+            fpe_mid, fpf_mid = fplib3.get_ef(fp_mid, dfp_mid, ntyp, types)
+            fpe_right, fpf_right = fplib3.get_ef(fp_right, dfp_right, ntyp, types)
+
+            for i_atom in range(nat):
+                del_fpe += ( -np.dot(rxyz_delta[i_atom], fpf_left[i_atom]) - \
+                            4.0*np.dot(rxyz_delta[i_atom], fpf_mid[i_atom]) - \
+                            np.dot(rxyz_delta[i_atom], fpf_right[i_atom]) )/3.0
+        
+        rxyz_final = rxyz + rxyz_disp
+        fp_init = fplib.get_lfp((lat, rxyz, types, znucl),
+                                cutoff = cutoff, log = False, natx = nx)
+        fp_final = fplib.get_lfp((lat, rxyz_final, types, znucl),
+                                cutoff = cutoff, log = False, natx = nx)
+        e_init = fplib3.get_fpe(fp_init, ntyp, types)
+        e_final = fplib3.get_fpe(fp_final, ntyp, types)
+        e_diff = e_final - e_init
+        
         print ( "Numerical integral = {0:.6e}".format(del_fpe) )
         print ( "Fingerprint energy difference = {0:.6e}".format(e_diff) )
-        if np.allclose(del_fpe, e_diff):
+        if np.allclose(del_fpe, e_diff, rtol=1e-6, atol=1e-6, equal_nan=False):
             print("Energy consistency test passed!")
         else:
             print("Energy consistency test failed!")
@@ -481,7 +525,7 @@ class fp_GD_Calculator(Calculator):
                format(np.array_str(fn, precision=6, suppress_small=False)) )
         print ( "Fingerprint forces = \n{0:s}".\
                format(np.array_str(f, precision=6, suppress_small=False)) )
-        if np.allclose(f, fn):
+        if np.allclose(f, fn, rtol=1e-6, atol=1e-6, equal_nan=False):
             print("Force consistency test passed!")
         else:
             print("Force consistency test failed!")
