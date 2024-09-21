@@ -132,7 +132,7 @@ print ("SW_energy:\n", atoms.get_potential_energy())
 print ("SW_forces:\n", atoms.get_forces())
 print ("SW_stress:\n", atoms.get_stress())
 ##################################################################################################
-'''
+
 
 
 
@@ -150,7 +150,7 @@ print ("SFLJ_stress:\n", atoms.get_stress())
 
 
 
-'''
+
 ########################################## For MgAl_2O_4 ##########################################
 
 from Buck_api4ase import Buckingham
@@ -182,7 +182,7 @@ c.min_distance_rule('O',
 calc1 = GULP(keywords = 'conp gradient stress_out',
              library = 'MgAlSiO.lib',
              shel=['O'])
-             
+
 calc1 = GULP(keywords = 'conp gradient stress_out',
              library = 'MgAlO.lib')
 
@@ -214,7 +214,7 @@ cmds = ["mass 1 24.305",
         "dump coord all custom 10 lammps.dump id element x y z",
         "dump_modify coord element Mg Al O",
         "min_style cg",
-        "minimize 1e-25 1e-25 5000 10000"] 
+        "minimize 1e-25 1e-25 5000 10000"]
 calc1 = LAMMPSlib(lmpcmds = cmds, log_file = 'lammps.log')
 
 atoms.calc = calc1
@@ -264,7 +264,7 @@ print ("M3GNet_forces:\n", atoms.get_forces())
 print ("M3GNet_stress:\n", atoms.get_stress())
 
 
-
+'''
 ###################################################################################################
 
 
@@ -274,14 +274,14 @@ from functools import reduce
 chem_nums = list(atoms.numbers)
 znucl_list = reduce(lambda re, x: re+[x] if x not in re else re, chem_nums, [])
 ntyp = len(znucl_list)
-znucl = np.array(znucl_list, int)
+znucl = znucl_list
 
 calc1 = fp_GD_Calculator(
-            cutoff = 6.0,
+            cutoff = 4.0,
             contract = False,
             znucl = znucl,
             lmax = 0,
-            nx = 300,
+            nx = 400,
             ntyp = ntyp
             )
 atoms.calc = calc1
@@ -292,9 +292,9 @@ atoms.calc = calc1
 print ("fp_energy:\n", atoms.get_potential_energy())
 print ("fp_forces:\n", atoms.get_forces())
 print ("fp_stress:\n", atoms.get_stress())
-'''
 
-############################## Relaxation type ############################## 
+
+############################## Relaxation type ##############################
 #     https ://wiki.fysik.dtu.dk/ase/ase/optimize.html#module-optimize      #
 #     https ://wiki.fysik.dtu.dk/ase/ase/constraints.html                   #
 #############################################################################
@@ -302,29 +302,34 @@ print ("fp_stress:\n", atoms.get_stress())
 # af = atoms
 # af = StrainFilter(atoms)
 # mask = np.ones((3,3), dtype = int) - np.eye(3, dtype = int)
-mask = np.eye(3, dtype = int)
-af = UnitCellFilter(atoms, mask = mask, constant_volume = True, scalar_pressure = 0.0)
+# mask = np.eye(3, dtype = int)
+# af = UnitCellFilter(atoms, mask = mask, constant_volume = True, scalar_pressure = 0.0)
+# af = UnitCellFilter(atoms, scalar_pressure = 0.062415)
+af = UnitCellFilter(atoms, scalar_pressure = 0.0)
+
+traj = Trajectory(trajfile, 'w', atoms=atoms, properties=['energy', 'forces', 'stress'])
 
 ############################## Relaxation method ##############################\
 
-# opt = BFGS(af, maxstep = 1.e-1, trajectory = trajfile)
-opt = FIRE(af, maxstep = 1.e-1, trajectory = trajfile)
-# opt = LBFGS(af, maxstep = 1.e-1, trajectory = trajfile, memory = 10, use_line_search = True)
-# opt = LBFGS(af, maxstep = 1.e-1, trajectory = trajfile, memory = 10, use_line_search = False)
-# opt = SciPyFminCG(af, maxstep = 1.e-1, trajectory = trajfile)
-# opt = SciPyFminBFGS(af, maxstep = 1.e-1, trajectory = trajfile)
+# opt = BFGS(af, maxstep = 1.e-1)
+opt = FIRE(af, maxstep = 1.e-1)
+# opt = LBFGS(af, maxstep = 1.e-1, memory = 10, use_line_search = True)
+# opt = LBFGS(af, maxstep = 1.e-1, memory = 10, use_line_search = False)
+# opt = SciPyFminCG(af, maxstep = 1.e-1)
+# opt = SciPyFminBFGS(af, maxstep = 1.e-1)
 
+opt.attach(traj.write, interval=1)
 opt.run(fmax = 1.e-3, steps = 5000)
 
-traj = Trajectory(trajfile)
+traj.close()
 atoms_final = traj[-1]
 ase.io.write('opt.vasp', atoms_final, direct = True, long_format=True, vasp5 = True)
 
-final_cell = atoms.get_cell()
-final_cell_par = atoms.cell.cellpar()
-final_structure = atoms.get_scaled_positions()
-final_energy_per_atom = float( atoms.get_potential_energy() / len(atoms_final) )
-final_stress = atoms.get_stress()
+final_cell = atoms_final.get_cell()
+final_cell_par = atoms_final.cell.cellpar()
+final_structure = atoms_final.get_scaled_positions()
+final_energy_per_atom = float( atoms_final.get_potential_energy() / len(atoms_final) )
+final_stress = atoms_final.get_stress()
 
 print("Relaxed lattice vectors are \n{0:s}".\
       format(np.array_str(final_cell, precision=6, suppress_small=False)))

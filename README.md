@@ -12,10 +12,44 @@
 * ASE >= 3.22.1
 
 ## Setup
-For conda installation guide please visit their [website](https://conda.io/projects/conda/en/latest/user-guide/install/index.html) \
-`conda create -n fplibenv python=3.8 pip ; conda activate fplibenv`\
-`python3 -m pip install --user -U pip setuptools wheel numpy scipy ase numba`\
-`git clone https://github.com/Tack-Tau/fplib3.git ./fplib3`
+To install the C implementation of [Fingerprint Library](https://github.com/Rutgers-ZRG/fplib)  \
+First, you need create a [conda](https://conda.io/projects/conda/en/latest/user-guide/install/index.html) environment:
+  ```bash
+  conda create -n fplibenv python=3.8 pip ; conda activate fplibenv
+  python3 -m pip install -U pip setuptools wheel
+  ```
+Then use conda to install LAPACK:
+  ```bash
+  conda install conda-forge::lapack
+  ```
+Next, you need to download the `fplib` using `git`:
+  ```bash
+  git clone https://github.com/Rutgers-ZRG/fplib.git
+  ```
+and modify the `setup.py` in `fplib/fppy`:
+  ```python
+  lapack_dir=["$CONDA_PREFIX/lib"]
+  lapack_lib=['openblas']
+  extra_link_args = ["-Wl,-rpath,$CONDA_PREFIX/lib"]
+  .
+  .
+  .
+  include_dirs = [source_dir, "$CONDA_PREFIX/include"]
+  ```
+  Also set the corresponding `DYLD_LIBRARY_PATH` in your `.bashrc` file as:
+  ```bash
+  export DYLD_LIBRARY_PATH="$CONDA_PREFIX/lib:$DYLD_LIBRARY_PATH"
+  ```
+  Then:
+  ```bash
+  cd fplib/fppy/ ; python3 -m pip install -e .
+  ```
+
+
+Then install the remaining Python packages through pip
+  ```bash
+  python3 -m pip install numpy>=1.21.4 scipy>=1.8.0 numba>=0.56.2 ase==3.22.1
+  ```
 
 ## Usage
 ### Basic ASE style documentation
