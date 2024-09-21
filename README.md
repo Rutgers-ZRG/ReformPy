@@ -13,7 +13,7 @@
 
 ## Setup
 To install the C implementation of [Fingerprint Library](https://github.com/Rutgers-ZRG/fplib)  \
-You need create a [conda](https://conda.io/projects/conda/en/latest/user-guide/install/index.html) environment:
+First, you need create a [conda](https://conda.io/projects/conda/en/latest/user-guide/install/index.html) environment:
   ```bash
   conda create -n fplibenv python=3.8 pip ; conda activate fplibenv
   python3 -m pip install -U pip setuptools wheel
@@ -47,7 +47,9 @@ and modify the `setup.py` in `fplib/fppy`:
 
 
 Then install the remaining Python packages through pip \
-`python3 -m pip install numpy>=1.21.4 scipy>=1.8.0 numba>=0.56.2 ase==3.22.1`
+  ```bash
+  python3 -m pip install numpy>=1.21.4 scipy>=1.8.0 numba>=0.56.2 ase==3.22.1
+  ```
 
 ## Usage
 ### Basic ASE style documentation
