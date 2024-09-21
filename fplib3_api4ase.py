@@ -14,18 +14,18 @@ from ase.calculators.calculator import CalculatorSetupError, all_changes
 
 class fp_GD_Calculator(Calculator):
     """ASE interface for fp_GD, with the Calculator interface.
-    
+
         Implemented Properties:
-        
-            'energy': Sum of atomic fingerprint distance (L2 norm of two atomic 
+
+            'energy': Sum of atomic fingerprint distance (L2 norm of two atomic
                                                           fingerprint vectors)
-            
+
             'energies': Per-atom property of 'energy'
-            
+
             'forces': Gradient of fingerprint energy, using Hellmann–Feynman theorem
-            
+
             'stress': Cauchy stress tensor using finite difference method
-            
+
             'stresses': Per-atom property of 'stress'
 
         Parameters:
@@ -35,28 +35,28 @@ class fp_GD_Calculator(Calculator):
 
             contract: bool
                 Calculate fingerprint vector in contracted Guassian-type orbitals or not
-            
+
             ntype: int
                 Number of different types of atoms in unit cell
-            
+
             nx: int
                 Maximum number of atoms in the sphere with cutoff radius for specific cell site
-                
+
             lmax: int
-                Integer to control whether using s orbitals only or both s and p orbitals for 
+                Integer to control whether using s orbitals only or both s and p orbitals for
                 calculating the Guassian overlap matrix (0 for s orbitals only, other integers
                 will indicate that using both s and p orbitals)
-                
+
             cutoff: float
                 Cutoff radius for f_c(r) (smooth cutoff function) [amp], unit in Angstroms
-                
+
     """
     # name = 'fingerprint'
     # ase_objtype = 'fingerprint_calculator'  # For JSON storage
 
     implemented_properties = [ 'energy', 'forces', 'stress' ]
     # implemented_properties += ['energies', 'stresses'] # per-atom properties
-    
+
     default_parameters = {
                           'contract': False,
                           'ntyp': 1,
@@ -65,7 +65,7 @@ class fp_GD_Calculator(Calculator):
                           'cutoff': 4.0,
                           'znucl': None
                           }
-    
+
     nolabel = True
 
     def __init__(self,
@@ -85,7 +85,7 @@ class fp_GD_Calculator(Calculator):
 
         # Initialize parameter dictionaries
         self._store_param_state()  # Initialize an empty parameter state
-        
+
         Calculator.__init__(self,
                             atoms = atoms,
                             **kwargs
@@ -116,7 +116,7 @@ class fp_GD_Calculator(Calculator):
 
         changed_parameters.update(Calculator.set(self, **kwargs))
         self.default_parameters.update(Calculator.set(self, **kwargs))
-        
+
         if changed_parameters:
             self.clear_results()  # We don't want to clear atoms
         for key in kwargs:
@@ -150,7 +150,7 @@ class fp_GD_Calculator(Calculator):
                   system_changes = tuple(all_changes),
                  ):
         """Do a fingerprint calculation in the specified directory.
-        This will read VASP input files (POSCAR) and then execute 
+        This will read VASP input files (POSCAR) and then execute
         fp_GD.
         """
         # Check for zero-length lattice vectors and PBC
@@ -161,7 +161,7 @@ class fp_GD_Calculator(Calculator):
         '''
         if atoms is not None:
             self.atoms = atoms.copy()
-        
+
         if properties is None:
             properties = self.implemented_properties
         '''
@@ -169,11 +169,11 @@ class fp_GD_Calculator(Calculator):
         if atoms is None:
             atoms = self.atoms
         # self.update_atoms(atoms)
-        
+
         # natoms = len(self.atoms)
         # energies = np.ones(natoms, dtype = np.float64)
         # identity = np.eye(3, dtype = np.float64)
-        
+
         # Per-atom energy has not been truely implemented yet, right now just returns average of cell energy with respect to total number of atoms in cell
         # self.results['energies'] = self.get_potential_energy(atoms) * energies / natoms
         self.results['energy'] = self.get_potential_energy(atoms)
@@ -186,8 +186,8 @@ class fp_GD_Calculator(Calculator):
         self.results['stress'] = self.get_stress(atoms)
         # Numerical stress, for verification
         # self.results['stress'] = self.calculate_numerical_stress(atoms)
-        
-    
+
+
     def check_state(self, atoms, tol = 1e-15):
         """Check for system changes since last calculation."""
         def compare_dict(d1, d2):
@@ -216,7 +216,7 @@ class fp_GD_Calculator(Calculator):
         '''
 
         return system_changes
-    
+
 
     def _store_param_state(self):
         """Store current parameter state"""
@@ -225,7 +225,7 @@ class fp_GD_Calculator(Calculator):
             )
 
     # Below defines some functions for faster access to certain common keywords
-    
+
     @property
     def contract(self):
         """Access the contract in default_parameters dict"""
@@ -275,7 +275,7 @@ class fp_GD_Calculator(Calculator):
     def cutoff(self, cutoff):
         """Set cutoff in default_parameters dict"""
         self.default_parameters['cutoff'] = cutoff
-    
+
     @property
     def znucl(self):
         """Access the znucl array in default_parameters dict"""
@@ -283,9 +283,11 @@ class fp_GD_Calculator(Calculator):
 
     @znucl.setter
     def znucl(self, znucl):
-        """Direct access for setting the znucl array"""
+        """Direct access for setting the znucl"""
+        if isinstance(znucl, (list, np.ndarray)):
+            znucl = list(znucl)
         self.set(znucl = znucl)
-        
+
     @property
     def types(self):
         """Direct access to the types array"""
@@ -295,7 +297,7 @@ class fp_GD_Calculator(Calculator):
     def types(self, types):
         """Direct access for setting the types array"""
         self.set(types = types)
-    
+
     @property
     def atoms(self):
         return self._atoms
@@ -309,7 +311,7 @@ class fp_GD_Calculator(Calculator):
             if self.check_state(atoms):
                 self.clear_results()
             self._atoms = atoms.copy()
-    
+
 
     def get_potential_energy(self, atoms = None, **kwargs):
         contract = self.contract
@@ -319,7 +321,7 @@ class fp_GD_Calculator(Calculator):
         cutoff = self.cutoff
         types = self.types
         znucl = self.znucl
-        
+
         if self.check_restart(atoms) or self._energy is None:
             # write_vasp('input.vasp', atoms, direct=True)
             lat = atoms.cell[:]
@@ -347,7 +349,7 @@ class fp_GD_Calculator(Calculator):
             fpe = fplib3.get_fpe(fp, ntyp = ntyp, types = types)
             self._energy = fpe
         return self._energy
-    
+
 
     def get_forces(self, atoms = None, **kwargs):
         contract = self.contract
@@ -357,7 +359,7 @@ class fp_GD_Calculator(Calculator):
         cutoff = self.cutoff
         types = self.types
         znucl = self.znucl
-        
+
         if self.check_restart(atoms) or self._forces is None:
             # write_vasp('input.vasp', atoms, direct=True)
             lat = atoms.cell[:]
@@ -386,7 +388,7 @@ class fp_GD_Calculator(Calculator):
             fpe, fpf = fplib3.get_ef(fp, dfp, ntyp = ntyp, types = types)
             self._forces = fpf
         return self._forces
-    
+
 
     def get_stress(self, atoms = None, **kwargs):
         contract = self.contract
@@ -396,7 +398,7 @@ class fp_GD_Calculator(Calculator):
         cutoff = self.cutoff
         types = self.types
         znucl = self.znucl
-        
+
         if self.check_restart(atoms) or self._stress is None:
             # write_vasp('input.vasp', atoms, direct=True)
             lat = atoms.cell[:]
@@ -424,7 +426,7 @@ class fp_GD_Calculator(Calculator):
             #                            cutoff = cutoff)
             self._stress = stress
         return self._stress
-    
+
 
     def test_energy_consistency(self, atoms = None, **kwargs):
         contract = self.contract
@@ -434,7 +436,7 @@ class fp_GD_Calculator(Calculator):
         cutoff = self.cutoff
         types = self.types
         znucl = self.znucl
-        
+
         # write_vasp('input.vasp', atoms, direct=True)
         lat = atoms.cell[:]
         rxyz = atoms.get_positions()
@@ -458,12 +460,12 @@ class fp_GD_Calculator(Calculator):
             print("Energy consistency test passed!")
         else:
             print("Energy consistency test failed!")
-        
-    
+
+
     def test_force_consistency(self, atoms = None, **kwargs):
-        
+
         from ase.calculators.test import numeric_force
-        
+
         indices = range(len(atoms))
         f = atoms.get_forces()[indices]
         print('{0:>16} {1:>20}'.format('eps', 'max(abs(df))'))
@@ -473,8 +475,8 @@ class fp_GD_Calculator(Calculator):
                 for j in range(3):
                     fn[idx, j] = numeric_force(atoms, i, j, eps)
             print('{0:16.12f} {1:20.12f}'.format(eps, abs(fn - f).max()))
-        
-        
+
+
         print ( "Numerical forces = \n{0:s}".\
                format(np.array_str(fn, precision=6, suppress_small=False)) )
         print ( "Fingerprint forces = \n{0:s}".\
@@ -483,8 +485,8 @@ class fp_GD_Calculator(Calculator):
             print("Force consistency test passed!")
         else:
             print("Force consistency test failed!")
-    
-   
+
+
 
 ########################################################################################
 ####################### Helper functions for the VASP calculator #######################
