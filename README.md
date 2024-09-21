@@ -46,7 +46,7 @@ and modify the `setup.py` in `fplib/fppy`:
   ```
 
 
-Then install the remaining Python packages through pip \
+Then install the remaining Python packages through pip
   ```bash
   python3 -m pip install numpy>=1.21.4 scipy>=1.8.0 numba>=0.56.2 ase==3.22.1
   ```
