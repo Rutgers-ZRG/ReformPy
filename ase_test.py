@@ -306,6 +306,13 @@ print ("fp_stress:\n", atoms.get_stress())
 # af = UnitCellFilter(atoms, mask = mask, constant_volume = True, scalar_pressure = 0.0)
 # af = UnitCellFilter(atoms, scalar_pressure = 0.062415)
 af = UnitCellFilter(atoms, scalar_pressure = 0.0)
+#        Helpful conversion table for scalar pressure:
+#        - 9.36224e-2 eV/A^3 = 15.00000 GPa
+#        - 6.24150e-2 eV/A^3 = 10.00000 GPa
+#        - 3.12075e-2 eV/A^3 = 5.00000 GPa
+#        - 1.87245e-2 eV/A^3 = 3.00000 GPa
+#        - 1.24830e-2 eV/A^3 = 2.00000 GPa
+#        - 1.00000 eV/A^3 = 1.60218e+2 GPa
 
 traj = Trajectory(trajfile, 'w', atoms=atoms, properties=['energy', 'forces', 'stress'])
 
@@ -320,10 +327,11 @@ opt = FIRE(af, maxstep = 1.e-1)
 
 opt.attach(traj.write, interval=1)
 opt.run(fmax = 1.e-3, steps = 5000)
-
 traj.close()
+
+traj = Trajectory(trajfile, 'r')
 atoms_final = traj[-1]
-ase.io.write('opt.vasp', atoms_final, direct = True, long_format=True, vasp5 = True)
+ase.io.write('opt.vasp', atoms_final, direct = True, long_format = True, vasp5 = True)
 
 final_cell = atoms_final.get_cell()
 final_cell_par = atoms_final.cell.cellpar()
@@ -340,6 +348,3 @@ print("Relaxed structure in fractional coordinates is \n{0:s}".\
 print("Final energy per atom is \n{0:.6f}".format(final_energy_per_atom))
 print("Final stress is \n{0:s}".\
       format(np.array_str(final_stress, precision=6, suppress_small=False)))
-
-
-
