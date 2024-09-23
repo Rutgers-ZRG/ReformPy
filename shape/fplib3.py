@@ -1,6 +1,6 @@
 import numpy as np
 import numba
-from numba import jit, types, int32, float64
+from numba import jit, njit, int32, float64
 from scipy.optimize import linear_sum_assignment
 
 def get_rcovdata():
@@ -734,7 +734,9 @@ def get_fp(lat, rxyz, types, znucl,
         return lfp, dfp
 
 # @jit(nopython=True)
-def get_fpdist(ntyp, types, fp1, fp2, mx=False):
+def get_fp_dist(fp1, fp2, types, mx=False):
+# def get_fp_dist(ntyp, types, fp1, fp2, mx=False):
+    ntyp = len(set(types))
     nat, lenfp = np.shape(fp1)
     fpd = 0.0
     for ityp in range(ntyp):
@@ -760,351 +762,284 @@ def get_fpdist(ntyp, types, fp1, fp2, mx=False):
         return fpd
     
 
-#from numba import njit, int32, float64
 
-###@njit
+def get_lfp(cell,
+            cutoff=4.0,
+            log=True,
+            orbital='s',
+            natx=300):
+    '''
+    cell : tuple (lattice, rxyz, types, znucl)
+    '''
+    (lat, rxyz, types, znucl) = _expand_cell(cell)
+    if log is True:
+        wlog = 1
+    else:
+        wlog = 0
+    if orbital == 's':
+        lmax = 0
+    elif orbital == 'sp':
+        lmax = 1
+    else:
+        print ('Warning: wrong type of orbital')
+        lmax = 0
+
+    contract = False
+    ldfp = False
+    nx = natx
+    ntyp = len(set(types))
+    lfp, _ = get_fp(lat, rxyz, types, znucl, contract, ldfp, ntyp, nx, lmax, cutoff)
+    return np.array(lfp)
+
+
+def get_sfp(cell,
+            cutoff=4.0,
+            log=True,
+            orbital='s',
+            natx=300):
+    '''
+    cell : tuple (lattice, rxyz, types, znucl)
+    '''
+    lat, rxyz, types, znucl = _expand_cell(cell)
+    if log is True:
+        wlog = 1
+    else:
+        wlog = 0
+    if orbital == 's':
+        lmax = 0
+    elif orbital == 'sp':
+        lmax = 1
+    else:
+        print ('Warning: wrong type of orbital')
+        lmax = 0
+
+    contract = True
+    ldfp = False
+    nx = natx
+    ntyp = len(set(types))
+    sfp, _ = get_fp(lat, rxyz, types, znucl, contract, ldfp, ntyp, nx, lmax, cutoff)
+    return np.array(sfp)
+
+def get_dfp(cell,
+            cutoff=4.0,
+            log=True,
+            orbital='s',
+            natx=300):
+    '''
+    cell : tuple (lattice, rxyz, types, znucl)
+    '''
+    (lat, rxyz, types, znucl) = _expand_cell(cell)
+    if log is True:
+        wlog = 1
+    else:
+        wlog = 0
+    if orbital == 's':
+        lmax = 0
+    elif orbital == 'sp':
+        lmax = 1
+    else:
+        print ('Warning: wrong type of orbital')
+        lmax = 0
+
+    contract = False
+    ldfp = True
+    nx = natx
+    ntyp = len(set(types))
+    lfp, dfp = get_fp(lat, rxyz, types, znucl, contract, ldfp, ntyp, nx, lmax, cutoff)
+    return np.array(lfp), np.array(dfp)
+
+
+
+
+# def get_nfp(rxyz, types, znucl):
+#     nfp = fp.fp_nonperiodic(rxyz, types, znucl)
+#     return np.array(nfp)
+
+def get_nfp_dist(fp1, fp2):
+    d = fp1 - fp2
+    return np.sqrt(np.dot(d, d))
+
+def _expand_cell(cell):
+    lat = np.array(cell[0], float)
+    rxyz = np.array(cell[1], float)
+    types = np.array(cell[2], int)
+    znucl = np.array(cell[3], int)
+    if len(rxyz) != len(types) or len(set(types)) != len(znucl):
+        raise ValueError('Something wrong with rxyz / types / znucl.')
+    return lat, rxyz, types, znucl
+
 
 # @jit('Tuple((float64, float64[:,:]))(float64[:,:], float64[:,:,:,:], int32, \
-#        int32[:])', nopython=True)
+#       int32[:])', nopython=True)
 # def get_ef(fp, dfp, ntyp, types):
-#     nat, D = fp.shape  # Number of atoms and feature dimension
-#     e = 0.0
-
-#     # Initialize force arrays
-#     force_0 = np.zeros((nat, 3))
-#     force_prime = np.zeros((nat, 3))
-
-#     # Compute norms of fp manually
-#     norms = np.empty(nat)
-#     for i in range(nat):
-#         norms[i] = 0.0
-#         for d in range(D):
-#             norms[i] += fp[i, d] ** 2
-#         norms[i] = np.sqrt(norms[i])
-
-#     # Energy calculation
+#     nat = len(fp)
+#     e = 0.
+#     fp = np.ascontiguousarray(fp)
+#     dfp = np.ascontiguousarray(dfp)
 #     for ityp in range(ntyp):
 #         itype = ityp + 1
-
-#         # Collect indices of atoms of the current type
-#         indices = np.empty(nat, dtype=np.int32)
-#         count = 0
+#         e0 = 0.
 #         for i in range(nat):
-#             if types[i] == itype:
-#                 indices[count] = i
-#                 count += 1
-#         n_type_atoms = count
-
-#         if n_type_atoms == 0:
-#             continue  # Skip if no atoms of this type
-
-#         # Extract fp and norms for the current type
-#         fp_type = np.empty((n_type_atoms, D))
-#         norms_type = np.empty(n_type_atoms)
-#         for idx in range(n_type_atoms):
-#             i = indices[idx]
-#             fp_type[idx, :] = fp[i, :]
-#             norms_type[idx] = norms[i]
-
-#         # Energy calculation for the current type
-#         e0 = 0.0
-#         for i in range(n_type_atoms):
-#             for j in range(n_type_atoms):
-#                 vij = fp_type[i, :] - fp_type[j, :]
-#                 t = 0.0
-#                 for d in range(D):
-#                     t += vij[d] ** 2
-#                 e0 += t
-#         for i in range(n_type_atoms):
-#             e0 += 1.0 / (norms_type[i] ** 2)
+#             for j in range(nat):
+#                 if types[i] == itype and types[j] == itype:
+#                     vij = fp[i] - fp[j]
+#                     t = np.vdot(vij, vij)
+#                     e0 += t
+#             e0 += 1.0/(np.linalg.norm(fp[i]) ** 2)
+#         # print ("e0", e0)
 #         e += e0
+#     # print ("e", e)
 
-#         # Force calculation for force_0
-#         for k in range(nat):
-#             # dfp for atoms of this type and atom k
-#             dfp_type_k = np.empty((n_type_atoms, 3, D))
-#             for idx in range(n_type_atoms):
-#                 i = indices[idx]
-#                 for l in range(3):
-#                     for d in range(D):
-#                         dfp_type_k[idx, l, d] = dfp[i, k, l, d]
+#     force_0 = np.zeros((nat, 3), dtype = np.float64)
+#     force_prime = np.zeros((nat, 3), dtype = np.float64)
 
-#             # Compute force_0 contribution
-#             for i in range(n_type_atoms):
-#                 for j in range(n_type_atoms):
-#                     vij = fp_type[i, :] - fp_type[j, :]
-#                     for l in range(3):
-#                         dvij = np.empty(D)
-#                         for d in range(D):
-#                             dvij[d] = dfp_type_k[i, l, d] - dfp_type_k[j, l, d]
-#                         t = -2.0 * np.dot(vij, dvij)
-#                         force_0[k, l] += t 
-
-#     # Force calculation for force_prime (over all atoms)
 #     for k in range(nat):
-#         # dfp for all atoms and atom k
-#         dfp_k = np.empty((nat, 3, D))
-#         for i in range(nat):
-#             for l in range(3):
-#                 for d in range(D):
-#                     dfp_k[i, l, d] = dfp[i, k, l, d]
-
-#         # Compute numerators and denominators
-#         for l in range(3):
-#             t_prime = 0.0
+#         for ityp in range(ntyp):
+#             itype = ityp + 1
 #             for i in range(nat):
-#                 numerator = 0.0
-#                 for d in range(D):
-#                     numerator += fp[i, d] * dfp_k[i, l, d]
-#                 denominator = norms[i] ** 4
-#                 t_prime += 2.0 * numerator / denominator
-#             force_prime[k, l] += t_prime
-
-#     # Final force calculation
-#     total_force = np.sum(force_0 + force_prime, axis=0) / nat
-#     force = (force_0 + force_prime) - total_force
-
+#                 for j in range(nat):
+#                     if  types[i] == itype and types[j] == itype:
+#                         vij = fp[i] - fp[j]
+#                         dvij = dfp[i][k] - dfp[j][k]
+#                         for l in range(3):
+#                             t = -2 * np.vdot(vij, dvij[l])
+#                             force_0[k][l] += t
+#                 for m in range(3):
+#                     t_prime = 2.0 * np.vdot(fp[i],dfp[i][k][m]) / (np.linalg.norm(fp[i]) ** 4)
+#                     force_prime[k][m] += t_prime
+#     force = force_0 + force_prime
+#     force = force - np.sum(force, axis=0)/len(force)
+#     # return ((e+1.0)*np.log(e+1.0)-e), force*np.log(e+1.0) 
 #     return e, force
 
-@jit('Tuple((float64, float64[:,:]))(float64[:,:], float64[:,:,:,:], int32, \
-      int32[:])', nopython=True)
-def get_ef(fp, dfp, ntyp, types):
-    nat = len(fp)
-    e = 0.
-    fp = np.ascontiguousarray(fp)
-    dfp = np.ascontiguousarray(dfp)
-    for ityp in range(ntyp):
-        itype = ityp + 1
-        e0 = 0.
-        for i in range(nat):
-            for j in range(nat):
-                if types[i] == itype and types[j] == itype:
-                    vij = fp[i] - fp[j]
-                    t = np.vdot(vij, vij)
-                    e0 += t
-            e0 += 1.0/(np.linalg.norm(fp[i]) ** 2)
-        # print ("e0", e0)
-        e += e0
-    # print ("e", e)
 
-    force_0 = np.zeros((nat, 3), dtype = np.float64)
-    force_prime = np.zeros((nat, 3), dtype = np.float64)
-
-    for k in range(nat):
-        for ityp in range(ntyp):
-            itype = ityp + 1
-            for i in range(nat):
-                for j in range(nat):
-                    if  types[i] == itype and types[j] == itype:
-                        vij = fp[i] - fp[j]
-                        dvij = dfp[i][k] - dfp[j][k]
-                        for l in range(3):
-                            t = -2 * np.vdot(vij, dvij[l])
-                            force_0[k][l] += t
-                for m in range(3):
-                    t_prime = 2.0 * np.vdot(fp[i],dfp[i][k][m]) / (np.linalg.norm(fp[i]) ** 4)
-                    force_prime[k][m] += t_prime
-    force = force_0 + force_prime
-    force = force - np.sum(force, axis=0)/len(force)
-    # return ((e+1.0)*np.log(e+1.0)-e), force*np.log(e+1.0) 
-    return e, force
+# @jit('(float64)(float64[:,:], int32, int32[:])', nopython=True)
+# def get_fpe(fp, ntyp, types):
+#     nat = len(fp)
+#     e = 0.
+#     fp = np.ascontiguousarray(fp)
+#     for ityp in range(ntyp):
+#         itype = ityp + 1
+#         e0 = 0.
+#         for i in range(nat):
+#             for j in range(nat):
+#                 if types[i] == itype and types[j] == itype:
+#                     vij = fp[i] - fp[j]
+#                     t = np.vdot(vij, vij)
+#                     e0 += t
+#             e0 += 1.0/(np.linalg.norm(fp[i]) ** 2)
+#         e += e0
+#     # return ((e+1.0)*np.log(e+1.0)-e)
+#     return e
 
 
-@jit('(float64)(float64[:,:], int32, int32[:])', nopython=True)
-def get_fpe(fp, ntyp, types):
-    nat = len(fp)
-    e = 0.
-    fp = np.ascontiguousarray(fp)
-    for ityp in range(ntyp):
-        itype = ityp + 1
-        e0 = 0.
-        for i in range(nat):
-            for j in range(nat):
-                if types[i] == itype and types[j] == itype:
-                    vij = fp[i] - fp[j]
-                    t = np.vdot(vij, vij)
-                    e0 += t
-            e0 += 1.0/(np.linalg.norm(fp[i]) ** 2)
-        e += e0
-    # return ((e+1.0)*np.log(e+1.0)-e)
-    return e
+# @njit
+# def get_stress(lat, rxyz, forces):
+#     """
+#     Compute the stress tensor analytically using the virial theorem.
 
-# @jit('(float64[:])(float64[:,:], float64[:,:], int32[:], int32[:], \
-#       boolean, int32, int32, int32, float64)', nopython=True)
-# def get_stress(lat, rxyz, types, znucl,
-#                contract,
-#                ntyp,
-#                nx,
-#                lmax,
-#                cutoff):
-#     lat = np.ascontiguousarray(lat)
-#     rxyz = np.ascontiguousarray(rxyz)
-#     pos = np.dot(rxyz, np.linalg.inv(lat))
-#     pos = np.ascontiguousarray(pos)
-#     rxyz_delta = np.zeros_like(rxyz)
-#     cell_vol = np.linalg.det(lat)
-#     # stress = np.zeros(6)
-#     stress = np.zeros((3,3), dtype = np.float64)
-#     step_size = 1.e-5
-#     strain_delta_tmp = step_size*(np.random.randint(1, 9999, (3, 3))/9999)
-#     # print (strain_delta_tmp)
-#     # Make strain tensor symmetric
-#     strain_delta = 0.5*(strain_delta_tmp + strain_delta_tmp.T - \
-#                         np.diag(np.diag(strain_delta_tmp))) 
-#     # print (strain_delta)
-#     rxyz_ratio = np.eye(3, dtype = np.float64)
-#     # rxyz_ratio_new = rxyz_ratio.copy()
-#     for m in range(3):
-#         for n in range(3):
-#             h = strain_delta[m][n]
-#             rxyz_ratio_left = np.eye(3, dtype = np.float64)
-#             rxyz_ratio_right = np.eye(3, dtype = np.float64)
-#             rxyz_ratio_left[m][n] = rxyz_ratio[m][n] - h
-#             rxyz_ratio_left[n][m] = rxyz_ratio_left[m][n]
-#             rxyz_ratio_right[m][n] = rxyz_ratio[m][n] + h
-#             rxyz_ratio_right[n][m] = rxyz_ratio_right[m][n]
-#             lat_left = np.dot(lat, rxyz_ratio_left)
-#             lat_right = np.dot(lat, rxyz_ratio_right)
-#             rxyz_left = np.dot(pos, lat_left)
-#             rxyz_right = np.dot(pos, lat_right)
-#             ldfp = False
-#             fp_left, dfptmp1 = get_fp(lat_left, rxyz_left, types, znucl, \
-#                                       contract, ldfp, ntyp, nx, lmax, cutoff)
-#             fp_right, dfptmp2 = get_fp(lat_right, rxyz_right, types, znucl, \
-#                                        contract, ldfp, ntyp, nx, lmax, cutoff)
-#             fp_energy_left = get_fpe(fp_left, ntyp, types)
-#             fp_energy_right = get_fpe(fp_right, ntyp, types)
-#             stress[m][n] = (fp_energy_right - fp_energy_left)/(2.0*h*cell_vol)
-#         #################
+#     Parameters:
+#     - lat: (3, 3) array of lattice vectors.
+#     - rxyz: (nat, 3) array of atomic positions in Cartesian coordinates.
+#     - forces: (nat, 3) array of forces on each atom.
 
+#     Returns:
+#     - stress_voigt: (6,) array representing the stress tensor in Voigt notation.
+#     """
+#     # Ensure inputs are NumPy arrays with correct data types
+#     lat = np.asarray(lat, dtype=np.float64)
+#     rxyz = np.asarray(rxyz, dtype=np.float64)
+#     forces = np.asarray(forces, dtype=np.float64)
 
+#     # Compute the cell volume
+#     cell_vol = np.abs(np.linalg.det(lat))
 
-        
-#     #################
-#     # print (stress)
-#     stress_voigt = np.zeros(6, dtype = np.float64)
-#     voigt_list = [0, 4, 8, 5, 2, 1]
-#     for i in range(6):
-#         stress_voigt[i] = stress.ravel()[voigt_list[i]]
-#     # stress_voigt = stress.flat[[0, 4, 8, 5, 2, 1]]
-#     # stress_voigt = np.array(stress_voigt, dtype = np.float64)
-#     # return np.zeros(6, dtype = np.float64)
+#     # Initialize the stress tensor
+#     stress_tensor = np.zeros((3, 3), dtype=np.float64)
+
+#     # Compute the stress tensor using the virial theorem
+#     nat = rxyz.shape[0]
+#     for i in range(nat):
+#         for m in range(3):
+#             for n in range(3):
+#                 stress_tensor[m, n] -= forces[i, m] * rxyz[i, n]
+
+#     # Divide by the cell volume
+#     stress_tensor /= cell_vol
+
+#     # Ensure the stress tensor is symmetric (if applicable)
+#     # stress_tensor = 0.5 * (stress_tensor + stress_tensor.T)
+
+#     # Convert the stress tensor to Voigt notation
+#     # The Voigt notation order is: [xx, yy, zz, yz, xz, xy]
+#     stress_voigt = np.array([
+#         stress_tensor[0, 0],  # xx
+#         stress_tensor[1, 1],  # yy
+#         stress_tensor[2, 2],  # zz
+#         stress_tensor[1, 2],  # yz
+#         stress_tensor[0, 2],  # xz
+#         stress_tensor[0, 1],  # xy
+#     ], dtype=np.float64)
+
 #     return stress_voigt
 
 
-
-from numba import njit
-
-@njit
-def get_stress(lat, rxyz, forces):
-
-
-
-    """
-    Compute the stress tensor analytically using the virial theorem.
-
-    Parameters:
-    - lat: (3, 3) array of lattice vectors.
-    - rxyz: (nat, 3) array of atomic positions in Cartesian coordinates.
-    - forces: (nat, 3) array of forces on each atom.
-
-    Returns:
-    - stress_voigt: (6,) array representing the stress tensor in Voigt notation.
-    """
-    # Ensure inputs are NumPy arrays with correct data types
-    lat = np.asarray(lat, dtype=np.float64)
-    rxyz = np.asarray(rxyz, dtype=np.float64)
-    forces = np.asarray(forces, dtype=np.float64)
-
-    # Compute the cell volume
-    cell_vol = np.abs(np.linalg.det(lat))
-
-    # Initialize the stress tensor
-    stress_tensor = np.zeros((3, 3), dtype=np.float64)
-
-    # Compute the stress tensor using the virial theorem
-    nat = rxyz.shape[0]
-    for i in range(nat):
-        for m in range(3):
-            for n in range(3):
-                stress_tensor[m, n] -= forces[i, m] * rxyz[i, n]
-
-    # Divide by the cell volume
-    stress_tensor /= cell_vol
-
-    # Ensure the stress tensor is symmetric (if applicable)
-    # stress_tensor = 0.5 * (stress_tensor + stress_tensor.T)
-
-    # Convert the stress tensor to Voigt notation
-    # The Voigt notation order is: [xx, yy, zz, yz, xz, xy]
-    stress_voigt = np.array([
-        stress_tensor[0, 0],  # xx
-        stress_tensor[1, 1],  # yy
-        stress_tensor[2, 2],  # zz
-        stress_tensor[1, 2],  # yz
-        stress_tensor[0, 2],  # xz
-        stress_tensor[0, 1],  # xy
-    ], dtype=np.float64)
-
-    return stress_voigt
-
-
-@jit('Tuple((float64, float64))(float64[:,:], float64[:,:], int32[:], int32[:], \
-      boolean, int32, int32, int32, float64)', nopython=True)
-def get_simpson_energy(lat, rxyz, types, znucl,
-                       contract,
-                       ntyp,
-                       nx,
-                       lmax,
-                       cutoff):
-    lat = np.ascontiguousarray(lat)
-    rxyz = np.ascontiguousarray(rxyz)
-    rxyz_delta = np.zeros_like(rxyz)
-    rxyz_disp = np.zeros_like(rxyz)
-    rxyz_left = np.zeros_like(rxyz)
-    rxyz_mid = np.zeros_like(rxyz)
-    rxyz_right = np.zeros_like(rxyz)
-    nat = len(rxyz)
-    del_fpe = 0.0
-    iter_max = 100
-    step_size = 1.e-5
-    rxyz_delta = step_size*( np.random.rand(nat, 3).astype(np.float64) - \
-                            0.5*np.ones((nat, 3), dtype = np.float64) )
-    for i_iter in range(iter_max):
-        # rxyz_delta = step_size*( np.random.rand(nat, 3).astype(np.float64) - \
-        #                         0.5*np.ones((nat, 3), dtype = np.float64) )
-        rxyz_disp += 2.0*rxyz_delta
-        rxyz_left = rxyz.copy() + 2.0*i_iter*rxyz_delta
-        rxyz_mid = rxyz.copy() + 2.0*(i_iter+1)*rxyz_delta
-        rxyz_right = rxyz.copy() + 2.0*(i_iter+2)*rxyz_delta
-        ldfp = True
-        fp_left, dfp_left = get_fp(lat, rxyz_left, types, znucl, \
-                                   contract, ldfp, ntyp, nx, lmax, cutoff)
-        fp_mid, dfp_mid = get_fp(lat, rxyz_mid, types, znucl, \
-                                   contract, ldfp, ntyp, nx, lmax, cutoff)
-        fp_right, dfp_right = get_fp(lat, rxyz_right, types, znucl, \
-                                     contract, ldfp, ntyp, nx, lmax, cutoff)
-        fpe_left, fpf_left = get_ef(fp_left, dfp_left, ntyp, types)
-        fpe_mid, fpf_mid = get_ef(fp_mid, dfp_mid, ntyp, types)
-        fpe_right, fpf_right = get_ef(fp_right, dfp_right, ntyp, types)
+# @jit('Tuple((float64, float64))(float64[:,:], float64[:,:], int32[:], int32[:], \
+#       boolean, int32, int32, int32, float64)', nopython=True)
+# def get_simpson_energy(lat, rxyz, types, znucl,
+#                        contract,
+#                        ntyp,
+#                        nx,
+#                        lmax,
+#                        cutoff):
+#     lat = np.ascontiguousarray(lat)
+#     rxyz = np.ascontiguousarray(rxyz)
+#     rxyz_delta = np.zeros_like(rxyz)
+#     rxyz_disp = np.zeros_like(rxyz)
+#     rxyz_left = np.zeros_like(rxyz)
+#     rxyz_mid = np.zeros_like(rxyz)
+#     rxyz_right = np.zeros_like(rxyz)
+#     nat = len(rxyz)
+#     del_fpe = 0.0
+#     iter_max = 100
+#     step_size = 1.e-5
+#     rxyz_delta = step_size*( np.random.rand(nat, 3).astype(np.float64) - \
+#                             0.5*np.ones((nat, 3), dtype = np.float64) )
+#     for i_iter in range(iter_max):
+#         # rxyz_delta = step_size*( np.random.rand(nat, 3).astype(np.float64) - \
+#         #                         0.5*np.ones((nat, 3), dtype = np.float64) )
+#         rxyz_disp += 2.0*rxyz_delta
+#         rxyz_left = rxyz.copy() + 2.0*i_iter*rxyz_delta
+#         rxyz_mid = rxyz.copy() + 2.0*(i_iter+1)*rxyz_delta
+#         rxyz_right = rxyz.copy() + 2.0*(i_iter+2)*rxyz_delta
+#         ldfp = True
+#         fp_left, dfp_left = get_fp(lat, rxyz_left, types, znucl, \
+#                                    contract, ldfp, ntyp, nx, lmax, cutoff)
+#         fp_mid, dfp_mid = get_fp(lat, rxyz_mid, types, znucl, \
+#                                    contract, ldfp, ntyp, nx, lmax, cutoff)
+#         fp_right, dfp_right = get_fp(lat, rxyz_right, types, znucl, \
+#                                      contract, ldfp, ntyp, nx, lmax, cutoff)
+#         fpe_left, fpf_left = get_ef(fp_left, dfp_left, ntyp, types)
+#         fpe_mid, fpf_mid = get_ef(fp_mid, dfp_mid, ntyp, types)
+#         fpe_right, fpf_right = get_ef(fp_right, dfp_right, ntyp, types)
         
-        rxyz_delta = np.ascontiguousarray(rxyz_delta)
-        fpf_left = np.ascontiguousarray(fpf_left)
-        fpf_mid = np.ascontiguousarray(fpf_mid)
-        fpf_right = np.ascontiguousarray(fpf_right)
-        for i_atom in range(nat):
-            del_fpe += ( -np.dot(rxyz_delta[i_atom], fpf_left[i_atom]) - \
-                        4.0*np.dot(rxyz_delta[i_atom], fpf_mid[i_atom]) - \
-                        np.dot(rxyz_delta[i_atom], fpf_right[i_atom]) )/3.0
+#         rxyz_delta = np.ascontiguousarray(rxyz_delta)
+#         fpf_left = np.ascontiguousarray(fpf_left)
+#         fpf_mid = np.ascontiguousarray(fpf_mid)
+#         fpf_right = np.ascontiguousarray(fpf_right)
+#         for i_atom in range(nat):
+#             del_fpe += ( -np.dot(rxyz_delta[i_atom], fpf_left[i_atom]) - \
+#                         4.0*np.dot(rxyz_delta[i_atom], fpf_mid[i_atom]) - \
+#                         np.dot(rxyz_delta[i_atom], fpf_right[i_atom]) )/3.0
         
-    rxyz_final = rxyz + rxyz_disp
-    ldfp = False
-    fp_init, dfptmp1 = get_fp(lat, rxyz, types, znucl, \
-                              contract, ldfp, ntyp, nx, lmax, cutoff)
-    fp_final, dfptmp2 = get_fp(lat, rxyz_final, types, znucl, \
-                               contract, ldfp, ntyp, nx, lmax, cutoff)
-    e_init = get_fpe(fp_init, ntyp, types)
-    e_final = get_fpe(fp_final, ntyp, types)
-    e_diff = e_final - e_init
-    return del_fpe, e_diff
+#     rxyz_final = rxyz + rxyz_disp
+#     ldfp = False
+#     fp_init, dfptmp1 = get_fp(lat, rxyz, types, znucl, \
+#                               contract, ldfp, ntyp, nx, lmax, cutoff)
+#     fp_final, dfptmp2 = get_fp(lat, rxyz_final, types, znucl, \
+#                                contract, ldfp, ntyp, nx, lmax, cutoff)
+#     e_init = get_fpe(fp_init, ntyp, types)
+#     e_final = get_fpe(fp_final, ntyp, types)
+#     e_diff = e_final - e_init
+#     return del_fpe, e_diff
     
