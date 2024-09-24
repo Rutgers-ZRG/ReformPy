@@ -9,7 +9,7 @@ from numba import jit, njit, int32, float64
 try:
     import fplib
 except:
-    import fplib3 as fplib
+    from shape import fplib3 as fplib
     print("Warning: Failed to import fplib. Using Python version of fplib3 instead, which may affect performance.")
 
 #################################### ASE Reference ####################################
