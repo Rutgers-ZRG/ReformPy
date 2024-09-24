@@ -1,10 +1,16 @@
 import numpy as np
-import fplib3
-import fplib
 import ase.io
 from ase.atoms import Atoms
 from ase.calculators.calculator import Calculator
 from ase.calculators.calculator import CalculatorSetupError, all_changes
+
+from numba import jit, njit, int32, float64
+
+try:
+    import fplib
+except:
+    import fplib3 as fplib
+    print("Warning: Failed to import fplib. Using Python version of fplib3 instead, which may affect performance.")
 
 #################################### ASE Reference ####################################
 #        https://gitlab.com/ase/ase/-/blob/master/ase/calculators/calculator.py       #
@@ -12,8 +18,8 @@ from ase.calculators.calculator import CalculatorSetupError, all_changes
 #        https://wiki.fysik.dtu.dk/ase/development/calculators.html                   #
 #######################################################################################
 
-class fp_GD_Calculator(Calculator):
-    """ASE interface for fp_GD, with the Calculator interface.
+class SHAPE_Calculator(Calculator):
+    """ASE interface for SHAPE, with the Calculator interface.
 
         Implemented Properties:
 
@@ -291,7 +297,7 @@ class fp_GD_Calculator(Calculator):
     @property
     def types(self):
         """Direct access to the types array"""
-        return fplib3.read_types(self.cell_file)
+        return read_types(self.cell_file)
 
     @types.setter
     def types(self, types):
@@ -336,17 +342,11 @@ class fp_GD_Calculator(Calculator):
             nx = np.int32(nx)
             lmax = np.int32(lmax)
             cutoff = np.float64(cutoff)
-            # fp, _ = fplib3.get_fp(lat, rxyz, types, znucl,
-            #                       contract = contract,
-            #                       ldfp = False,
-            #                       ntyp = ntyp,
-            #                       nx = nx,
-            #                       lmax = lmax,
-            #                       cutoff = cutoff)
+
             cell = (lat, rxyz, types, znucl)
             fp = fplib.get_lfp(cell, cutoff = cutoff, log = False, natx = nx)
             fp = np.float64(fp)
-            fpe = fplib3.get_fpe(fp, ntyp = ntyp, types = types)
+            fpe = get_fpe(fp, ntyp = ntyp, types = types)
             self._energy = fpe
         return self._energy
 
@@ -374,18 +374,12 @@ class fp_GD_Calculator(Calculator):
             nx = np.int32(nx)
             lmax = np.int32(lmax)
             cutoff = np.float64(cutoff)
-            # fp, dfp = fplib3.get_fp(lat, rxyz, types, znucl,
-            #                         contract = contract,
-            #                         ldfp = True,
-            #                         ntyp = ntyp,
-            #                         nx = nx,
-            #                         lmax = lmax,
-            #                         cutoff = cutoff)
+
             cell = (lat, rxyz, types, znucl)
             fp, dfp  = fplib.get_dfp(cell, cutoff = cutoff, log = False, natx = nx)
             fp = np.float64(fp)
             dfp = np.array(dfp, dtype = np.float64)
-            fpe, fpf = fplib3.get_ef(fp, dfp, ntyp = ntyp, types = types)
+            fpe, fpf = get_ef(fp, dfp, ntyp = ntyp, types = types)
             self._forces = fpf
         return self._forces
 
@@ -417,13 +411,8 @@ class fp_GD_Calculator(Calculator):
             cutoff = np.float64(cutoff)
             # forces = self._forces
             forces=atoms.get_forces()
-            stress = fplib3.get_stress(lat, rxyz, forces)
-            # stress = fplib3.get_stress(lat, rxyz, types, znucl,
-            #                            contract = contract,
-            #                            ntyp = ntyp,
-            #                            nx = nx,
-            #                            lmax = lmax,
-            #                            cutoff = cutoff)
+            stress = get_stress(lat, rxyz, forces)
+
             self._stress = stress
         return self._stress
 
@@ -577,3 +566,137 @@ def check_atoms_type(atoms: Atoms) -> None:
         raise CalculatorSetupError(
             ('Expected an Atoms object, '
              'instead got object of type {}'.format(type(atoms))))
+
+
+
+
+@jit('Tuple((float64, float64[:,:]))(float64[:,:], float64[:,:,:,:], int32, \
+      int32[:])', nopython=True)
+def get_ef(fp, dfp, ntyp, types):
+    nat = len(fp)
+    e = 0.
+    fp = np.ascontiguousarray(fp)
+    dfp = np.ascontiguousarray(dfp)
+    for ityp in range(ntyp):
+        itype = ityp + 1
+        e0 = 0.
+        for i in range(nat):
+            for j in range(nat):
+                if types[i] == itype and types[j] == itype:
+                    vij = fp[i] - fp[j]
+                    t = np.vdot(vij, vij)
+                    e0 += t
+            e0 += 1.0/(np.linalg.norm(fp[i]) ** 2)
+        # print ("e0", e0)
+        e += e0
+    # print ("e", e)
+
+    force_0 = np.zeros((nat, 3), dtype = np.float64)
+    force_prime = np.zeros((nat, 3), dtype = np.float64)
+
+    for k in range(nat):
+        for ityp in range(ntyp):
+            itype = ityp + 1
+            for i in range(nat):
+                for j in range(nat):
+                    if  types[i] == itype and types[j] == itype:
+                        vij = fp[i] - fp[j]
+                        dvij = dfp[i][k] - dfp[j][k]
+                        for l in range(3):
+                            t = -2 * np.vdot(vij, dvij[l])
+                            force_0[k][l] += t
+                for m in range(3):
+                    t_prime = 2.0 * np.vdot(fp[i],dfp[i][k][m]) / (np.linalg.norm(fp[i]) ** 4)
+                    force_prime[k][m] += t_prime
+    force = force_0 + force_prime
+    force = force - np.sum(force, axis=0)/len(force)
+    # return ((e+1.0)*np.log(e+1.0)-e), force*np.log(e+1.0) 
+    return e, force
+
+
+@jit('(float64)(float64[:,:], int32, int32[:])', nopython=True)
+def get_fpe(fp, ntyp, types):
+    nat = len(fp)
+    e = 0.
+    fp = np.ascontiguousarray(fp)
+    for ityp in range(ntyp):
+        itype = ityp + 1
+        e0 = 0.
+        for i in range(nat):
+            for j in range(nat):
+                if types[i] == itype and types[j] == itype:
+                    vij = fp[i] - fp[j]
+                    t = np.vdot(vij, vij)
+                    e0 += t
+            e0 += 1.0/(np.linalg.norm(fp[i]) ** 2)
+        e += e0
+    # return ((e+1.0)*np.log(e+1.0)-e)
+    return e
+
+
+@njit
+def get_stress(lat, rxyz, forces):
+    """
+    Compute the stress tensor analytically using the virial theorem.
+
+    Parameters:
+    - lat: (3, 3) array of lattice vectors.
+    - rxyz: (nat, 3) array of atomic positions in Cartesian coordinates.
+    - forces: (nat, 3) array of forces on each atom.
+
+    Returns:
+    - stress_voigt: (6,) array representing the stress tensor in Voigt notation.
+    """
+    # Ensure inputs are NumPy arrays with correct data types
+    lat = np.asarray(lat, dtype=np.float64)
+    rxyz = np.asarray(rxyz, dtype=np.float64)
+    forces = np.asarray(forces, dtype=np.float64)
+
+    # Compute the cell volume
+    cell_vol = np.abs(np.linalg.det(lat))
+
+    # Initialize the stress tensor
+    stress_tensor = np.zeros((3, 3), dtype=np.float64)
+
+    # Compute the stress tensor using the virial theorem
+    nat = rxyz.shape[0]
+    for i in range(nat):
+        for m in range(3):
+            for n in range(3):
+                stress_tensor[m, n] -= forces[i, m] * rxyz[i, n]
+
+    # Divide by the cell volume
+    stress_tensor /= cell_vol
+
+    # Ensure the stress tensor is symmetric (if applicable)
+    # stress_tensor = 0.5 * (stress_tensor + stress_tensor.T)
+
+    # Convert the stress tensor to Voigt notation
+    # The Voigt notation order is: [xx, yy, zz, yz, xz, xy]
+    stress_voigt = np.array([
+        stress_tensor[0, 0],  # xx
+        stress_tensor[1, 1],  # yy
+        stress_tensor[2, 2],  # zz
+        stress_tensor[1, 2],  # yz
+        stress_tensor[0, 2],  # xz
+        stress_tensor[0, 1],  # xy
+    ], dtype=np.float64)
+
+    return stress_voigt
+
+
+def read_types(vp):
+    buff = []
+    with open(vp) as f:
+        for line in f:
+            buff.append(line.split())
+    try:
+        typt = np.array(buff[5], int)
+    except:
+        del(buff[5])
+        typt = np.array(buff[5], int)
+    types = []
+    for i in range(len(typt)):
+        types += [i+1]*typt[i]
+    types = np.array(types, int)
+    return types

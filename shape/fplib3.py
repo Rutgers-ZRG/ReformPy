@@ -157,44 +157,44 @@ def get_ixyz(lat, cutoff):
     return ixyz
 
 # @jit(nopython=True)
-def readvasp(vp):
-    buff = []
-    with open(vp) as f:
-        for line in f:
-            buff.append(line.split())
+# def readvasp(vp):
+#     buff = []
+#     with open(vp) as f:
+#         for line in f:
+#             buff.append(line.split())
 
-    lat = np.array(buff[2:5], float) 
-    try:
-        typt = np.array(buff[5], int)
-    except:
-        del(buff[5])
-        typt = np.array(buff[5], int)
-    nat = sum(typt)
-    pos = np.array(buff[7:7 + nat], float)
-    types = []
-    for i in range(len(typt)):
-        types += [i+1]*typt[i]
-    types = np.array(types, int)
-    rxyz = np.dot(pos, lat)
-    # rxyz = pos
-    return lat, rxyz, types
+#     lat = np.array(buff[2:5], float) 
+#     try:
+#         typt = np.array(buff[5], int)
+#     except:
+#         del(buff[5])
+#         typt = np.array(buff[5], int)
+#     nat = sum(typt)
+#     pos = np.array(buff[7:7 + nat], float)
+#     types = []
+#     for i in range(len(typt)):
+#         types += [i+1]*typt[i]
+#     types = np.array(types, int)
+#     rxyz = np.dot(pos, lat)
+#     # rxyz = pos
+#     return lat, rxyz, types
 
-# @jit(nopython=True)
-def read_types(vp):
-    buff = []
-    with open(vp) as f:
-        for line in f:
-            buff.append(line.split())
-    try:
-        typt = np.array(buff[5], int)
-    except:
-        del(buff[5])
-        typt = np.array(buff[5], int)
-    types = []
-    for i in range(len(typt)):
-        types += [i+1]*typt[i]
-    types = np.array(types, int)
-    return types
+# # @jit(nopython=True)
+# def read_types(vp):
+#     buff = []
+#     with open(vp) as f:
+#         for line in f:
+#             buff.append(line.split())
+#     try:
+#         typt = np.array(buff[5], int)
+#     except:
+#         del(buff[5])
+#         typt = np.array(buff[5], int)
+#     types = []
+#     for i in range(len(typt)):
+#         types += [i+1]*typt[i]
+#     types = np.array(types, int)
+#     return types
 
 # @jit('Tuple((float64[:,:], float64[:,:]))(int32, float64[:,:], \
 #       float64[:], float64[:])', nopython=True)
