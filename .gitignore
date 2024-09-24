@@ -9,7 +9,6 @@ __pycache__
 input.vasp
 INCAR
 KPOINTS
-POSCAR
 POTCAR
 CONTCAR
 OUTCAR
