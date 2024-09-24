@@ -6,119 +6,119 @@ from scipy.optimize import linear_sum_assignment
 def get_rcovdata():
     dat = \
     [[ 0  , "X" , 1.0],
-    [ 1  , "H"  , 0.37],  
-    [ 2  , "He" , 0.32],  
-    [ 3  , "Li" , 1.34],  
-    [ 4  , "Be" , 0.90],  
-    [ 5  , "B"  , 0.82],  
-    [ 6  , "C"  , 0.77],  
-    [ 7  , "N"  , 0.75],  
-    [ 8  , "O"  , 0.73],  
-    [ 9  , "F"  , 0.71],  
-    [ 10 , "Ne" , 0.69],  
-    [ 11 , "Na" , 1.54],  
-    [ 12 , "Mg" , 1.30],  
-    [ 13 , "Al" , 1.18],  
-    [ 14 , "Si" , 1.11],  
-    [ 15 , "P"  , 1.06],  
-    [ 16 , "S"  , 1.02],  
-    [ 17 , "Cl" , 0.99],  
-    [ 18 , "Ar" , 0.97],  
-    [ 19 , "K"  , 1.96],  
-    [ 20 , "Ca" , 1.74],  
-    [ 21 , "Sc" , 1.44],  
-    [ 22 , "Ti" , 1.36],  
-    [ 23 , "V"  , 1.25],  
-    [ 24 , "Cr" , 1.27],  
-    [ 25 , "Mn" , 1.39],  
-    [ 26 , "Fe" , 1.25],  
-    [ 27 , "Co" , 1.26],  
-    [ 28 , "Ni" , 1.21],  
-    [ 29 , "Cu" , 1.38],  
-    [ 30 , "Zn" , 1.31],  
-    [ 31 , "Ga" , 1.26],  
-    [ 32 , "Ge" , 1.22],  
-    [ 33 , "As" , 1.19],  
-    [ 34 , "Se" , 1.16],  
-    [ 35 , "Br" , 1.14],  
-    [ 36 , "Kr" , 1.10],  
-    [ 37 , "Rb" , 2.11],  
-    [ 38 , "Sr" , 1.92],  
-    [ 39 , "Y"  , 1.62],  
-    [ 40 , "Zr" , 1.48],  
-    [ 41 , "Nb" , 1.37],  
-    [ 42 , "Mo" , 1.45],  
-    [ 43 , "Tc" , 1.56],  
-    [ 44 , "Ru" , 1.26],  
-    [ 45 , "Rh" , 1.35],  
-    [ 46 , "Pd" , 1.31],  
-    [ 47 , "Ag" , 1.53],  
-    [ 48 , "Cd" , 1.48],  
-    [ 49 , "In" , 1.44],  
-    [ 50 , "Sn" , 1.41],  
-    [ 51 , "Sb" , 1.38],  
-    [ 52 , "Te" , 1.35],  
-    [ 53 , "I"  , 1.33],  
-    [ 54 , "Xe" , 1.30],  
-    [ 55 , "Cs" , 2.25],  
-    [ 56 , "Ba" , 1.98],  
-    [ 57 , "La" , 1.80],  
-    [ 58 , "Ce" , 1.63],  
-    [ 59 , "Pr" , 1.76],  
-    [ 60 , "Nd" , 1.74],  
-    [ 61 , "Pm" , 1.73],  
-    [ 62 , "Sm" , 1.72],  
-    [ 63 , "Eu" , 1.68],  
-    [ 64 , "Gd" , 1.69],  
-    [ 56 , "Tb" , 1.68],  
-    [ 66 , "Dy" , 1.67],  
-    [ 67 , "Ho" , 1.66],  
-    [ 68 , "Er" , 1.65],  
-    [ 69 , "Tm" , 1.64],  
-    [ 70 , "Yb" , 1.70],  
-    [ 71 , "Lu" , 1.60],  
-    [ 72 , "Hf" , 1.50],  
-    [ 73 , "Ta" , 1.38],  
-    [ 74 , "W"  , 1.46],  
-    [ 75 , "Re" , 1.59],  
-    [ 76 , "Os" , 1.28],  
-    [ 77 , "Ir" , 1.37],  
-    [ 78 , "Pt" , 1.28],  
-    [ 79 , "Au" , 1.44],  
-    [ 80 , "Hg" , 1.49],  
-    [ 81 , "Tl" , 1.48],  
-    [ 82 , "Pb" , 1.47],  
-    [ 83 , "Bi" , 1.46],  
-    [ 84 , "Po" , 1.45],  
-    [ 85 , "At" , 1.47],  
-    [ 86 , "Rn" , 1.42],  
-    [ 87 , "Fr" , 2.23],  
-    [ 88 , "Ra" , 2.01],  
-    [ 89 , "Ac" , 1.86],  
-    [ 90 , "Th" , 1.75],  
-    [ 91 , "Pa" , 1.69],  
-    [ 92 , "U"  , 1.70],  
-    [ 93 , "Np" , 1.71],  
-    [ 94 , "Pu" , 1.72],  
-    [ 95 , "Am" , 1.66],  
-    [ 96 , "Cm" , 1.66],  
-    [ 97 , "Bk" , 1.68],  
-    [ 98 , "Cf" , 1.68],  
-    [ 99 , "Es" , 1.65],  
-    [ 100, "Fm" , 1.67],  
-    [ 101, "Md" , 1.73],  
-    [ 102, "No" , 1.76],  
-    [ 103, "Lr" , 1.61],  
-    [ 104, "Rf" , 1.57],  
-    [ 105, "Db" , 1.49],  
-    [ 106, "Sg" , 1.43],  
-    [ 107, "Bh" , 1.41],  
-    [ 108, "Hs" , 1.34],  
-    [ 109, "Mt" , 1.29],  
-    [ 110, "Ds" , 1.28],  
-    [ 111, "Rg" , 1.21],  
+    [ 1  , "H"  , 0.37],
+    [ 2  , "He" , 0.32],
+    [ 3  , "Li" , 1.34],
+    [ 4  , "Be" , 0.90],
+    [ 5  , "B"  , 0.82],
+    [ 6  , "C"  , 0.77],
+    [ 7  , "N"  , 0.75],
+    [ 8  , "O"  , 0.73],
+    [ 9  , "F"  , 0.71],
+    [ 10 , "Ne" , 0.69],
+    [ 11 , "Na" , 1.54],
+    [ 12 , "Mg" , 1.30],
+    [ 13 , "Al" , 1.18],
+    [ 14 , "Si" , 1.11],
+    [ 15 , "P"  , 1.06],
+    [ 16 , "S"  , 1.02],
+    [ 17 , "Cl" , 0.99],
+    [ 18 , "Ar" , 0.97],
+    [ 19 , "K"  , 1.96],
+    [ 20 , "Ca" , 1.74],
+    [ 21 , "Sc" , 1.44],
+    [ 22 , "Ti" , 1.36],
+    [ 23 , "V"  , 1.25],
+    [ 24 , "Cr" , 1.27],
+    [ 25 , "Mn" , 1.39],
+    [ 26 , "Fe" , 1.25],
+    [ 27 , "Co" , 1.26],
+    [ 28 , "Ni" , 1.21],
+    [ 29 , "Cu" , 1.38],
+    [ 30 , "Zn" , 1.31],
+    [ 31 , "Ga" , 1.26],
+    [ 32 , "Ge" , 1.22],
+    [ 33 , "As" , 1.19],
+    [ 34 , "Se" , 1.16],
+    [ 35 , "Br" , 1.14],
+    [ 36 , "Kr" , 1.10],
+    [ 37 , "Rb" , 2.11],
+    [ 38 , "Sr" , 1.92],
+    [ 39 , "Y"  , 1.62],
+    [ 40 , "Zr" , 1.48],
+    [ 41 , "Nb" , 1.37],
+    [ 42 , "Mo" , 1.45],
+    [ 43 , "Tc" , 1.56],
+    [ 44 , "Ru" , 1.26],
+    [ 45 , "Rh" , 1.35],
+    [ 46 , "Pd" , 1.31],
+    [ 47 , "Ag" , 1.53],
+    [ 48 , "Cd" , 1.48],
+    [ 49 , "In" , 1.44],
+    [ 50 , "Sn" , 1.41],
+    [ 51 , "Sb" , 1.38],
+    [ 52 , "Te" , 1.35],
+    [ 53 , "I"  , 1.33],
+    [ 54 , "Xe" , 1.30],
+    [ 55 , "Cs" , 2.25],
+    [ 56 , "Ba" , 1.98],
+    [ 57 , "La" , 1.80],
+    [ 58 , "Ce" , 1.63],
+    [ 59 , "Pr" , 1.76],
+    [ 60 , "Nd" , 1.74],
+    [ 61 , "Pm" , 1.73],
+    [ 62 , "Sm" , 1.72],
+    [ 63 , "Eu" , 1.68],
+    [ 64 , "Gd" , 1.69],
+    [ 56 , "Tb" , 1.68],
+    [ 66 , "Dy" , 1.67],
+    [ 67 , "Ho" , 1.66],
+    [ 68 , "Er" , 1.65],
+    [ 69 , "Tm" , 1.64],
+    [ 70 , "Yb" , 1.70],
+    [ 71 , "Lu" , 1.60],
+    [ 72 , "Hf" , 1.50],
+    [ 73 , "Ta" , 1.38],
+    [ 74 , "W"  , 1.46],
+    [ 75 , "Re" , 1.59],
+    [ 76 , "Os" , 1.28],
+    [ 77 , "Ir" , 1.37],
+    [ 78 , "Pt" , 1.28],
+    [ 79 , "Au" , 1.44],
+    [ 80 , "Hg" , 1.49],
+    [ 81 , "Tl" , 1.48],
+    [ 82 , "Pb" , 1.47],
+    [ 83 , "Bi" , 1.46],
+    [ 84 , "Po" , 1.45],
+    [ 85 , "At" , 1.47],
+    [ 86 , "Rn" , 1.42],
+    [ 87 , "Fr" , 2.23],
+    [ 88 , "Ra" , 2.01],
+    [ 89 , "Ac" , 1.86],
+    [ 90 , "Th" , 1.75],
+    [ 91 , "Pa" , 1.69],
+    [ 92 , "U"  , 1.70],
+    [ 93 , "Np" , 1.71],
+    [ 94 , "Pu" , 1.72],
+    [ 95 , "Am" , 1.66],
+    [ 96 , "Cm" , 1.66],
+    [ 97 , "Bk" , 1.68],
+    [ 98 , "Cf" , 1.68],
+    [ 99 , "Es" , 1.65],
+    [ 100, "Fm" , 1.67],
+    [ 101, "Md" , 1.73],
+    [ 102, "No" , 1.76],
+    [ 103, "Lr" , 1.61],
+    [ 104, "Rf" , 1.57],
+    [ 105, "Db" , 1.49],
+    [ 106, "Sg" , 1.43],
+    [ 107, "Bh" , 1.41],
+    [ 108, "Hs" , 1.34],
+    [ 109, "Mt" , 1.29],
+    [ 110, "Ds" , 1.28],
+    [ 111, "Rg" , 1.21],
     [ 112, "Cn" , 1.22]]
-    
+
     return dat
 
 @jit('(float64)(int32, int32)', nopython=True)
@@ -163,7 +163,7 @@ def readvasp(vp):
         for line in f:
             buff.append(line.split())
 
-    lat = np.array(buff[2:5], float) 
+    lat = np.array(buff[2:5], float)
     try:
         typt = np.array(buff[5], int)
     except:
@@ -201,7 +201,7 @@ def read_types(vp):
 @jit(nopython=True)
 def get_gom(lseg, rxyz, alpha, amp):
     # s orbital only lseg == 1
-    nat = len(rxyz)    
+    nat = len(rxyz)
     if lseg == 1:
         om = np.zeros((nat, nat), dtype = np.float64)
         mamp = np.zeros((nat, nat), dtype = np.float64)
@@ -224,26 +224,26 @@ def get_gom(lseg, rxyz, alpha, amp):
                 d2 = np.vdot(d, d)
                 t1 = alpha[iat] * alpha[jat]
                 t2 = alpha[iat] + alpha[jat]
-                
+
                 # <s_i | s_j>
                 sij = np.sqrt(2.0*np.sqrt(t1)/t2)**3 * np.exp(-t1/t2*d2)
                 om[4*iat][4*jat] = sij
                 mamp[4*iat][4*jat] = amp[iat]*amp[jat]
-                
+
                 # <s_i | p_j>
                 stv = 2.0 * (1/np.sqrt(alpha[jat])) * (t1/t2) * sij
-                om[4*iat][4*jat+1] = stv * d[0] 
-                om[4*iat][4*jat+2] = stv * d[1] 
-                om[4*iat][4*jat+3] = stv * d[2]  
-                
+                om[4*iat][4*jat+1] = stv * d[0]
+                om[4*iat][4*jat+2] = stv * d[1]
+                om[4*iat][4*jat+3] = stv * d[2]
+
                 mamp[4*iat][4*jat+1] = amp[iat]*amp[jat]
                 mamp[4*iat][4*jat+2] = amp[iat]*amp[jat]
                 mamp[4*iat][4*jat+3] = amp[iat]*amp[jat]
-                # <p_i | s_j> 
+                # <p_i | s_j>
                 stv = -2.0 * (1/np.sqrt(alpha[iat])) * (t1/t2) * sij
-                om[4*iat+1][4*jat] = stv * d[0] 
-                om[4*iat+2][4*jat] = stv * d[1] 
-                om[4*iat+3][4*jat] = stv * d[2] 
+                om[4*iat+1][4*jat] = stv * d[0]
+                om[4*iat+2][4*jat] = stv * d[1]
+                om[4*iat+3][4*jat] = stv * d[2]
 
                 mamp[4*iat+1][4*jat] = amp[iat]*amp[jat]
                 mamp[4*iat+2][4*jat] = amp[iat]*amp[jat]
@@ -253,26 +253,26 @@ def get_gom(lseg, rxyz, alpha, amp):
                 # stv = -8.0 * rcov[iat] * rcov[jat] * r * r * sji
                 stv = 2.0 * np.sqrt(t1)/t2 * sij
                 sx = -2.0*t1/t2
-                
+
                 for i_pp in range(3):
                     for j_pp in range(3):
                         om[4*iat+i_pp+1][4*jat+j_pp+1] = stv * (sx * d[i_pp] * d[j_pp] + \
                                                                 kron_delta(i_pp, j_pp))
-                
+
                 for i_pp in range(3):
                     for j_pp in range(3):
                         mamp[4*iat+i_pp+1][4*jat+j_pp+1] = amp[iat]*amp[jat]
-                
+
                 '''
-                om[4*iat+1][4*jat+1] = stv * (sx * d[0] * d[0] + 1.0) 
-                om[4*iat+1][4*jat+2] = stv * (sx * d[1] * d[0]      ) 
-                om[4*iat+1][4*jat+3] = stv * (sx * d[2] * d[0]      ) 
-                om[4*iat+2][4*jat+1] = stv * (sx * d[0] * d[1]      ) 
-                om[4*iat+2][4*jat+2] = stv * (sx * d[1] * d[1] + 1.0) 
-                om[4*iat+2][4*jat+3] = stv * (sx * d[2] * d[1]      ) 
-                om[4*iat+3][4*jat+1] = stv * (sx * d[0] * d[2]      ) 
-                om[4*iat+3][4*jat+2] = stv * (sx * d[1] * d[2]      ) 
-                om[4*iat+3][4*jat+3] = stv * (sx * d[2] * d[2] + 1.0) 
+                om[4*iat+1][4*jat+1] = stv * (sx * d[0] * d[0] + 1.0)
+                om[4*iat+1][4*jat+2] = stv * (sx * d[1] * d[0]      )
+                om[4*iat+1][4*jat+3] = stv * (sx * d[2] * d[0]      )
+                om[4*iat+2][4*jat+1] = stv * (sx * d[0] * d[1]      )
+                om[4*iat+2][4*jat+2] = stv * (sx * d[1] * d[1] + 1.0)
+                om[4*iat+2][4*jat+3] = stv * (sx * d[2] * d[1]      )
+                om[4*iat+3][4*jat+1] = stv * (sx * d[0] * d[2]      )
+                om[4*iat+3][4*jat+2] = stv * (sx * d[1] * d[2]      )
+                om[4*iat+3][4*jat+3] = stv * (sx * d[2] * d[2] + 1.0)
 
                 mamp[4*iat+1][4*jat+1] = amp[iat]*amp[jat]
                 mamp[4*iat+1][4*jat+2] = amp[iat]*amp[jat]
@@ -284,7 +284,7 @@ def get_gom(lseg, rxyz, alpha, amp):
                 mamp[4*iat+3][4*jat+2] = amp[iat]*amp[jat]
                 mamp[4*iat+3][4*jat+3] = amp[iat]*amp[jat]
                 '''
-    
+
     # for i in range(len(om)):
     #     for j in range(len(om)):
     #         if abs(om[i][j] - om[j][i]) > 1e-6:
@@ -301,7 +301,7 @@ def get_gom(lseg, rxyz, alpha, amp):
 #       float64[:], float64[:,:], float64[:], int32)', nopython=True)
 @jit(nopython=True)
 def get_dgom(lseg, gom, amp, damp, rxyz, alpha, icenter):
-    nat = len(rxyz)    
+    nat = len(rxyz)
     if lseg == 1:
         # s orbital only lseg == 1
         di = np.empty(3, dtype = np.float64)
@@ -317,16 +317,16 @@ def get_dgom(lseg, gom, amp, damp, rxyz, alpha, icenter):
                 tt = 2.0 * t1 / t2
                 dic = rxyz[iat] - rxyz[icenter]
                 djc = rxyz[jat] - rxyz[icenter]
-                
+
                 pij = amp[iat] * amp[jat]
                 dipj = damp[iat] * amp[jat]
                 djpi = damp[jat] * amp[iat]
-                
+
                 for k in range(3):
                     di[k] = -pij * tt * gom[iat][jat] * d[k] + dipj * gom[iat][jat] * dic[k]
                     dj[k] = +pij * tt * gom[iat][jat] * d[k] + djpi * gom[iat][jat] * djc[k]
                     dc[k] = -dipj * gom[iat][jat] * dic[k] - djpi * gom[iat][jat] * djc[k]
-                    
+
                     dgom[iat][k][iat][jat] += di[k]
                     dgom[jat][k][iat][jat] += dj[k]
                     dgom[icenter][k][iat][jat] += dc[k]
@@ -354,11 +354,11 @@ def get_dgom(lseg, gom, amp, damp, rxyz, alpha, icenter):
                 tt = 2.0 * t1 / t2
                 dic = rxyz[iat] - rxyz[icenter]
                 djc = rxyz[jat] - rxyz[icenter]
-                
+
                 pij = amp[iat] * amp[jat]
                 dipj = damp[iat] * amp[jat]
                 djpi = damp[jat] * amp[iat]
-                
+
                 # <s_i | s_j>
                 for k_ss in range(3):
                     dss_i[k_ss] = -pij * tt * gom[4*iat][4*jat] * d[k_ss] + dipj * \
@@ -367,11 +367,11 @@ def get_dgom(lseg, gom, amp, damp, rxyz, alpha, icenter):
                     gom[4*iat][4*jat] * djc[k_ss]
                     dss_c[k_ss] = -dipj * gom[4*iat][4*jat] * dic[k_ss] - djpi * \
                     gom[4*iat][4*jat] * djc[k_ss]
-                    
+
                     dgom[iat][k_ss][4*iat][4*jat] += dss_i[k_ss]
                     dgom[jat][k_ss][4*iat][4*jat] += dss_j[k_ss]
                     dgom[icenter][k_ss][4*iat][4*jat] += dss_c[k_ss]
-                
+
                 # <s_i | p_j>
                 for k_sp in range(3):
                     for i_sp in range(3):
@@ -380,20 +380,20 @@ def get_dgom(lseg, gom, amp, damp, rxyz, alpha, icenter):
                         (1/np.sqrt(alpha[jat]))* pij * tt ** 2 * \
                         np.multiply(d[k_sp], d[i_sp]) * gom[4*iat][4*jat] + \
                         dipj * gom[4*iat][4*jat+i_sp+1] * dic[k_sp]
-                        
+
                         dsp_j[k_sp][i_sp] = -(1/np.sqrt(alpha[jat])) * pij * tt * \
                         kron_delta(k_sp, i_sp) * gom[4*iat][4*jat] + \
                         (1/np.sqrt(alpha[jat]))* pij * tt ** 2 * \
                         np.multiply(d[k_sp], d[i_sp]) * gom[4*iat][4*jat] + \
                         djpi * gom[4*iat][4*jat+i_sp+1] * djc[k_sp]
-                        
+
                         dsp_c[k_sp][i_sp] = -dipj * gom[4*iat][4*jat+i_sp+1] * dic[k_sp] - \
                         djpi * gom[4*iat][4*jat+i_sp+1] * djc[k_sp]
-                        
+
                         dgom[iat][k_sp][4*iat][4*jat+i_sp+1] += dsp_i[k_sp][i_sp]
                         dgom[jat][k_sp][4*iat][4*jat+i_sp+1] += dsp_j[k_sp][i_sp]
                         dgom[icenter][k_sp][4*iat][4*jat+i_sp+1] += dsp_c[k_sp][i_sp]
-                
+
                 # <p_i | s_j>
                 for k_ps in range(3):
                     for i_ps in range(3):
@@ -402,20 +402,20 @@ def get_dgom(lseg, gom, amp, damp, rxyz, alpha, icenter):
                         (1/np.sqrt(alpha[iat]))* pij * tt ** 2 * \
                         np.multiply(d[k_ps], d[i_ps]) * gom[4*iat][4*jat] + \
                         dipj * gom[4*iat+i_ps+1][4*jat] * dic[k_ps]
-                        
+
                         dps_j[k_ps][i_ps] = +(1/np.sqrt(alpha[iat])) * pij * tt * \
                         kron_delta(k_ps, i_ps) * gom[4*iat][4*jat] - \
                         (1/np.sqrt(alpha[iat]))* pij * tt ** 2 * \
                         np.multiply(d[k_ps], d[i_ps]) * gom[4*iat][4*jat] + \
                         djpi * gom[4*iat+i_ps+1][4*jat] * djc[k_ps]
-                        
+
                         dps_c[k_ps][i_ps] = -dipj * gom[4*iat+i_ps+1][4*jat] * dic[k_ps] - \
                         djpi * gom[4*iat+i_ps+1][4*jat] * djc[k_ps]
-                        
+
                         dgom[iat][k_ps][4*iat+i_ps+1][4*jat] += dps_i[k_ps][i_ps]
                         dgom[jat][k_ps][4*iat+i_ps+1][4*jat] += dps_j[k_ps][i_ps]
                         dgom[icenter][k_ps][4*iat+i_ps+1][4*jat] += dps_c[k_ps][i_ps]
-                
+
                 # <p_i | p_j>
                 for k_pp in range(3):
                     for i_pp in range(3):
@@ -443,8 +443,8 @@ def get_dgom(lseg, gom, amp, damp, rxyz, alpha, icenter):
                             dgom[jat][k_pp][4*iat+i_pp+1][4*jat+j_pp+1] += dpp_j[k_pp][i_pp][j_pp]
                             dgom[icenter][k_pp][4*iat+i_pp+1][4*jat+j_pp+1] += \
                                                                            dpp_c[k_pp][i_pp][j_pp]
-                
-                
+
+
     return dgom
 
 # @jit('(float64[:])(float64[:,:], int32[:])', nopython=True)
@@ -481,7 +481,7 @@ def get_fp(lat, rxyz, types, znucl,
     else:
         lseg = 4
         l = 2
-    
+
     rcovdata =  [[ 0 ,  1.0],
                 [ 1  ,  0.37],
                 [ 2  ,  0.32],
@@ -595,7 +595,7 @@ def get_fp(lat, rxyz, types, znucl,
                 [ 110,  1.28],
                 [ 111,  1.21],
                 [ 112,  1.22]]
-    
+
     #Modified so that now a float is returned and converted into an int
     ixyzf = get_ixyz(lat, cutoff)
     ixyz = int(ixyzf) + 1
@@ -758,11 +758,10 @@ def get_fpdist(ntyp, types, fp1, fp2, mx=False):
         return fpd, col_ind
     else:
         return fpd
-    
 
-#from numba import njit, int32, float64
 
-###@njit
+# from numba import njit
+# @njit
 
 # @jit('Tuple((float64, float64[:,:]))(float64[:,:], float64[:,:,:,:], int32, \
 #        int32[:])', nopython=True)
@@ -838,7 +837,7 @@ def get_fpdist(ntyp, types, fp1, fp2, mx=False):
 #                         for d in range(D):
 #                             dvij[d] = dfp_type_k[i, l, d] - dfp_type_k[j, l, d]
 #                         t = -2.0 * np.dot(vij, dvij)
-#                         force_0[k, l] += t 
+#                         force_0[k, l] += t
 
 #     # Force calculation for force_prime (over all atoms)
 #     for k in range(nat):
@@ -906,7 +905,7 @@ def get_ef(fp, dfp, ntyp, types):
                     force_prime[k][m] += t_prime
     force = force_0 + force_prime
     force = force - np.sum(force, axis=0)/len(force)
-    # return ((e+1.0)*np.log(e+1.0)-e), force*np.log(e+1.0) 
+    # return ((e+1.0)*np.log(e+1.0)-e), force*np.log(e+1.0)
     return e, force
 
 
@@ -950,7 +949,7 @@ def get_fpe(fp, ntyp, types):
 #     # print (strain_delta_tmp)
 #     # Make strain tensor symmetric
 #     strain_delta = 0.5*(strain_delta_tmp + strain_delta_tmp.T - \
-#                         np.diag(np.diag(strain_delta_tmp))) 
+#                         np.diag(np.diag(strain_delta_tmp)))
 #     # print (strain_delta)
 #     rxyz_ratio = np.eye(3, dtype = np.float64)
 #     # rxyz_ratio_new = rxyz_ratio.copy()
@@ -979,7 +978,7 @@ def get_fpe(fp, ntyp, types):
 
 
 
-        
+
 #     #################
 #     # print (stress)
 #     stress_voigt = np.zeros(6, dtype = np.float64)
@@ -993,9 +992,10 @@ def get_fpe(fp, ntyp, types):
 
 
 
-from numba import njit
+# from numba import njit
+# @njit
 
-@njit
+@jit('(float64[:])(float64[:,:], float64[:,:], float64[:,:])', nopython=True)
 def get_stress(lat, rxyz, forces):
 
 
@@ -1087,7 +1087,7 @@ def get_simpson_energy(lat, rxyz, types, znucl,
         fpe_left, fpf_left = get_ef(fp_left, dfp_left, ntyp, types)
         fpe_mid, fpf_mid = get_ef(fp_mid, dfp_mid, ntyp, types)
         fpe_right, fpf_right = get_ef(fp_right, dfp_right, ntyp, types)
-        
+
         rxyz_delta = np.ascontiguousarray(rxyz_delta)
         fpf_left = np.ascontiguousarray(fpf_left)
         fpf_mid = np.ascontiguousarray(fpf_mid)
@@ -1096,7 +1096,7 @@ def get_simpson_energy(lat, rxyz, types, znucl,
             del_fpe += ( -np.dot(rxyz_delta[i_atom], fpf_left[i_atom]) - \
                         4.0*np.dot(rxyz_delta[i_atom], fpf_mid[i_atom]) - \
                         np.dot(rxyz_delta[i_atom], fpf_right[i_atom]) )/3.0
-        
+
     rxyz_final = rxyz + rxyz_disp
     ldfp = False
     fp_init, dfptmp1 = get_fp(lat, rxyz, types, znucl, \
@@ -1107,4 +1107,4 @@ def get_simpson_energy(lat, rxyz, types, znucl,
     e_final = get_fpe(fp_final, ntyp, types)
     e_diff = e_final - e_init
     return del_fpe, e_diff
-    
+
