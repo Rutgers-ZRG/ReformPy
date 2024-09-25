@@ -66,7 +66,9 @@ kpoints = kp_finder.get_kpoints(kgrid=0.07)
 pseudopotentials = {'Si': 'Si.pbe-n-rrkjus_psl.1.0.0.UPF'}
 # path_to_pseudopotentials="$HOME/apps/SSSP_1.3.0_PBE_efficiency"
 # command = 'mpirun -np 16 $HOME/apps/qe-7.2/bin pw.x -in PREFIX.pwi > PREFIX.pwo'
-if os.environ["ESPRESSO_PSEUDO"] is None:
+try:
+    os.environ["ESPRESSO_PSEUDO"]
+except KeyError:
     os.system("export ESPRESSO_PSEUDO=$HOME/apps/SSSP_1.3.0_PBE_efficiency")
 
 input_data = {
