@@ -41,7 +41,7 @@ class LinearCombinationCalculator(Calculator):
 
         self.calcs = calcs
         self.weights = weights
-        
+
         '''
         weights = np.ones(len(calcs)).tolist()
         pi_fmax = 1.0
@@ -51,7 +51,7 @@ class LinearCombinationCalculator(Calculator):
         for j in range(len(weights)):
             forces_j = calcs[j].get_property('forces', atoms)
             weights[j] = pi_fmax / np.amax(np.absolute(forces_j))
-        
+
         if len(weights) != len(calcs):
             raise ValueError('The length of the weights must be the same as \
                               the number of calculators!')
@@ -60,12 +60,12 @@ class LinearCombinationCalculator(Calculator):
         self.weights = weights
         '''
 
-    def calculate(self, 
-                  atoms = None, 
-                  properties = ['energy', 'forces', 'stress'], 
+    def calculate(self,
+                  atoms = None,
+                  properties = ['energy', 'forces', 'stress'],
                   system_changes = all_changes
                  ):
-        """ Calculates all the specific property for each calculator 
+        """ Calculates all the specific property for each calculator
             and returns with the summed value.
         """
 
@@ -117,24 +117,27 @@ class MixedCalculator(LinearCombinationCalculator):
         weight for calculator 2
     """
 
-    def __init__(self, calc1, calc2):
+    def __init__(self, calc1, calc2, iter_max = None):
         self.nonLinear_const = 3
         self.iter = 0
-        self.iter_max = 600
+        if iter_max is not None:
+            self.iter_max = iter_max*3
+        else:
+            self.iter_max = 300
         self.weights = [0.0, 1.0]
         weight1 = self.weights[0]
         weight2 = self.weights[1]
         super().__init__([calc1, calc2], [weight1, weight2])
 
     def set_weights(self, calc1, calc2, atoms):
-        
+
         if self.iter == 0:
-            # fmax_1 = np.amax(np.absolute(calc1.get_property('forces', atoms)))
-            # fmax_2 = np.amax(np.absolute(calc2.get_property('forces', atoms)))
+            # fmax_1 = np.amax(np.absolute(calc1.get_forces(atoms)))
+            # fmax_2 = np.amax(np.absolute(calc2.get_forces(atoms)))
             # self.f_ratio = fmax_1 / fmax_2
             self.weights[0] = 0.0
             self.weights[1] = 1.0
-        
+
         if self.iter >= self.iter_max:
             self.weights[0] = 1.0
             self.weights[1] = 0.0
@@ -146,22 +149,22 @@ class MixedCalculator(LinearCombinationCalculator):
                                 0.5*(np.sin(-np.pi*0.5 + np.pi*9*x_iter**2) + 1.0)
         # print("weights=", self.weights)
 
-    def calculate(self, 
-                  atoms = None, 
-                  properties = ['energy', 'forces', 'stress'], 
+    def calculate(self,
+                  atoms = None,
+                  properties = ['energy', 'forces', 'stress'],
                   system_changes = all_changes
                  ):
-        """ Calculates all the specific property for each calculator and returns 
+        """ Calculates all the specific property for each calculator and returns
             with the summed value.
         """
 
-        
+
         super().calculate(atoms, properties, system_changes)
         atoms = atoms or self.atoms
         self.set_weights(self.calcs[0], self.calcs[1], atoms)
         # print("weights=", self.weights)
         self.iter = self.iter + 1
-            
+
         if 'energy' in properties:
             if self.weights[0] > 0.0:
                 energy1 = self.calcs[0].get_potential_energy(atoms)
@@ -172,7 +175,7 @@ class MixedCalculator(LinearCombinationCalculator):
             else:
                 energy2 = 0.0
             self.results['energy_contributions'] = (energy1, energy2)
-            
+
         if 'forces' in properties:
             if self.weights[0] > 0.0:
                 force1 = self.calcs[0].get_forces(atoms)
@@ -183,7 +186,7 @@ class MixedCalculator(LinearCombinationCalculator):
             else:
                 force2 = np.zeros((len(atoms), 3), dtype = float)
             self.results['force_contributions'] = (force1, force2)
-            
+
         if 'stress' in properties:
             if self.weights[0] > 0.0:
                 stress1 = self.calcs[0].get_stress(atoms)
@@ -194,29 +197,29 @@ class MixedCalculator(LinearCombinationCalculator):
             else:
                 stress2 = np.zeros(6, dtype = float)
             self.results['stress_contributions'] = (stress1, stress2)
-        
+
 
     def get_energy_contributions(self, atoms = None):
         """ Return the potential energy from calc1 and calc2 respectively """
         self.calculate(properties = ['energy'], atoms = atoms)
         return self.results['energy_contributions']
-    
+
     def get_force_contributions(self, atoms = None):
         """ Return the forces from calc1 and calc2 respectively """
         self.calculate(properties = ['forces'], atoms = atoms)
         return self.results['force_contributions']
-    
+
     def get_stress_contributions(self, atoms = None):
         """ Return the Cauchy stress tensor from calc1 and calc2 respectively """
         self.calculate(properties = ['stress'], atoms = atoms)
         return self.results['stress_contributions']
-    
+
 
 
 class SumCalculator(LinearCombinationCalculator):
     """SumCalculator for combining multiple calculators.
 
-    This calculator can be used when there are different calculators for the different chemical 
+    This calculator can be used when there are different calculators for the different chemical
     environment or for example during delta leaning. It works with a list of arbitrary calculators
     and evaluates them in sequence when it is required. The supported properties are the intersection
     of the implemented properties in each calculator.
