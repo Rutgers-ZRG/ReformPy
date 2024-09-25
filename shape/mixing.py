@@ -164,33 +164,33 @@ class MixedCalculator(LinearCombinationCalculator):
             
         if 'energy' in properties:
             if self.weights[0] > 0.0:
-                energy1 = self.calcs[0].get_property('energy', atoms)
+                energy1 = self.calcs[0].get_potential_energy(atoms)
             else:
                 energy1 = 0.0
             if self.weights[1] > 0.0:
-                energy2 = self.calcs[1].get_property('energy', atoms)
+                energy2 = self.calcs[1].get_potential_energy(atoms)
             else:
                 energy2 = 0.0
             self.results['energy_contributions'] = (energy1, energy2)
             
         if 'forces' in properties:
             if self.weights[0] > 0.0:
-                force1 = self.calcs[0].get_property('forces', atoms)
+                force1 = self.calcs[0].get_forces(atoms)
             else:
                 force1 = np.zeros((len(atoms), 3), dtype = float)
             if self.weights[1] > 0.0:
-                force2 = self.calcs[1].get_property('forces', atoms)
+                force2 = self.calcs[1].get_forces(atoms)
             else:
                 force2 = np.zeros((len(atoms), 3), dtype = float)
             self.results['force_contributions'] = (force1, force2)
             
         if 'stress' in properties:
             if self.weights[0] > 0.0:
-                stress1 = self.calcs[0].get_property('stress', atoms)
+                stress1 = self.calcs[0].get_stress(atoms)
             else:
                 stress1 = np.zeros(6, dtype = float)
             if self.weights[1] > 0.0:
-                stress2 = self.calcs[1].get_property('stress', atoms)
+                stress2 = self.calcs[1].get_stress(atoms)
             else:
                 stress2 = np.zeros(6, dtype = float)
             self.results['stress_contributions'] = (stress1, stress2)
