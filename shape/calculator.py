@@ -4,7 +4,18 @@ from ase.atoms import Atoms
 from ase.calculators.calculator import Calculator
 from ase.calculators.calculator import CalculatorSetupError, all_changes
 
-from numba import jit, njit, int32, float64
+# from numba import jit, njit, int32, float64
+try:
+    from numba import jit, float64, int32
+    use_numba = True
+except ImportError:
+    use_numba = False
+
+    # Define dummy decorator and type aliases if Numba is not available
+    def jit(*args, **kwargs):
+        return lambda func: func
+    
+    float64 = int32 = lambda: None
 
 try:
     import libfp
@@ -621,7 +632,7 @@ def get_fpe(fp, ntyp, types):
     return e
 
 
-@njit
+@jit('(float64[:])(float64[:,:], float64[:,:], float64[:,:])', nopython=True)
 def get_stress(lat, rxyz, forces):
     """
     Compute the stress tensor analytically using the virial theorem.

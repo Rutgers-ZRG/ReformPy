@@ -1,8 +1,20 @@
 import warnings
 import numpy as np
 import numba
-from numba import jit, njit, int32, float64
+# from numba import jit, njit, int32, float64
 from scipy.optimize import linear_sum_assignment
+
+try:
+    from numba import jit, float64, int32
+    use_numba = True
+except ImportError:
+    use_numba = False
+
+    # Define dummy decorator and type aliases if Numba is not available
+    def jit(*args, **kwargs):
+        return lambda func: func
+    
+    float64 = int32 = lambda: None
 
 @jit(nopython=True)
 def get_rcovdata():
