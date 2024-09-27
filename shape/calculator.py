@@ -329,11 +329,10 @@ class SHAPE_Calculator(Calculator):
         znucl = self.znucl
 
         if self.check_restart(atoms) or self._energy is None:
-            # write_vasp('input.vasp', atoms, direct=True)
+            
             lat = atoms.cell[:]
             rxyz = atoms.get_positions()
-            # print("fp_energy lat=\n", lat)
-            # print("fp_energy rxyz=\n", rxyz)
+            
             lat = np.array(lat, dtype = np.float64)
             rxyz = np.array(rxyz, dtype = np.float64)
             types = np.int32(types)
@@ -361,11 +360,10 @@ class SHAPE_Calculator(Calculator):
         znucl = self.znucl
 
         if self.check_restart(atoms) or self._forces is None:
-            # write_vasp('input.vasp', atoms, direct=True)
+            
             lat = atoms.cell[:]
             rxyz = atoms.get_positions()
-            # print("fp_forces lat=\n", lat)
-            # print("fp_forces rxyz=\n", rxyz)
+            
             lat = np.array(lat, dtype = np.float64)
             rxyz = np.array(rxyz, dtype = np.float64)
             types = np.int32(types)
@@ -394,13 +392,10 @@ class SHAPE_Calculator(Calculator):
         znucl = self.znucl
 
         if self.check_restart(atoms) or self._stress is None:
-            # write_vasp('input.vasp', atoms, direct=True)
+            
             lat = atoms.cell[:]
             rxyz = atoms.get_positions()
-            pos = atoms.get_scaled_positions()
-            # print("fp_stress lat=\n", lat)
-            # print("fp_stress rxyz=\n", rxyz)
-            # print("fp_stress pos=\n", pos)
+            
             lat = np.array(lat, dtype = np.float64)
             rxyz = np.array(rxyz, dtype = np.float64)
             types = np.int32(types)
