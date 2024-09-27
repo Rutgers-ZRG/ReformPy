@@ -7,10 +7,10 @@ from ase.calculators.calculator import CalculatorSetupError, all_changes
 from numba import jit, njit, int32, float64
 
 try:
-    import fplib
+    import libfp
 except:
-    from shape import fplib3 as fplib
-    print("Warning: Failed to import fplib. Using Python version of fplib3 instead, which may affect performance.")
+    from shape import libfppy as libfp
+    print("Warning: Failed to import libfp. Using Python version of libfppy (python implementation of libfp) instead, which may affect performance.")
 
 #################################### ASE Reference ####################################
 #        https://gitlab.com/ase/ase/-/blob/master/ase/calculators/calculator.py       #
@@ -344,7 +344,7 @@ class SHAPE_Calculator(Calculator):
             cutoff = np.float64(cutoff)
 
             cell = (lat, rxyz, types, znucl)
-            fp = fplib.get_lfp(cell, cutoff = cutoff, log = False, natx = nx)
+            fp = libfp.get_lfp(cell, cutoff = cutoff, log = False, natx = nx)
             fp = np.float64(fp)
             fpe = get_fpe(fp, ntyp = ntyp, types = types)
             self._energy = fpe
@@ -376,7 +376,7 @@ class SHAPE_Calculator(Calculator):
             cutoff = np.float64(cutoff)
 
             cell = (lat, rxyz, types, znucl)
-            fp, dfp  = fplib.get_dfp(cell, cutoff = cutoff, log = False, natx = nx)
+            fp, dfp  = libfp.get_dfp(cell, cutoff = cutoff, log = False, natx = nx)
             fp = np.float64(fp)
             dfp = np.array(dfp, dtype = np.float64)
             fpe, fpf = get_ef(fp, dfp, ntyp = ntyp, types = types)
@@ -436,15 +436,7 @@ class SHAPE_Calculator(Calculator):
         ntyp =  np.int32(ntyp)
         nx = np.int32(nx)
         lmax = np.int32(lmax)
-        cutoff = np.float64(cutoff)
-        # del_fpe, e_diff = fplib3.get_simpson_energy(lat, rxyz, types, znucl,
-        #                                             contract = contract,
-        #                                             ntyp = ntyp,
-        #                                             nx = nx,
-        #                                             lmax = lmax,
-        #                                             cutoff = cutoff)
-        
-        
+        cutoff = np.float64(cutoff)   
         rxyz_delta = np.zeros_like(rxyz)
         rxyz_disp = np.zeros_like(rxyz)
         rxyz_left = np.zeros_like(rxyz)
@@ -463,15 +455,15 @@ class SHAPE_Calculator(Calculator):
             rxyz_mid = rxyz.copy() + 2.0*(i_iter+1)*rxyz_delta
             rxyz_right = rxyz.copy() + 2.0*(i_iter+2)*rxyz_delta
             
-            fp_left, dfp_left = fplib.get_dfp((lat, rxyz_left, types, znucl),
+            fp_left, dfp_left = libfp.get_dfp((lat, rxyz_left, types, znucl),
                                               cutoff = cutoff, log = False, natx = nx)
-            fp_mid, dfp_mid = fplib.get_dfp((lat, rxyz_mid, types, znucl),
+            fp_mid, dfp_mid = libfp.get_dfp((lat, rxyz_mid, types, znucl),
                                               cutoff = cutoff, log = False, natx = nx)
-            fp_right, dfp_right = fplib.get_dfp((lat, rxyz_right, types, znucl),
+            fp_right, dfp_right = libfp.get_dfp((lat, rxyz_right, types, znucl),
                                               cutoff = cutoff, log = False, natx = nx)
-            fpe_left, fpf_left = fplib3.get_ef(fp_left, dfp_left, ntyp, types)
-            fpe_mid, fpf_mid = fplib3.get_ef(fp_mid, dfp_mid, ntyp, types)
-            fpe_right, fpf_right = fplib3.get_ef(fp_right, dfp_right, ntyp, types)
+            fpe_left, fpf_left = get_ef(fp_left, dfp_left, ntyp, types)
+            fpe_mid, fpf_mid = get_ef(fp_mid, dfp_mid, ntyp, types)
+            fpe_right, fpf_right = get_ef(fp_right, dfp_right, ntyp, types)
 
             for i_atom in range(nat):
                 del_fpe += ( -np.dot(rxyz_delta[i_atom], fpf_left[i_atom]) - \
@@ -479,12 +471,12 @@ class SHAPE_Calculator(Calculator):
                             np.dot(rxyz_delta[i_atom], fpf_right[i_atom]) )/3.0
         
         rxyz_final = rxyz + rxyz_disp
-        fp_init = fplib.get_lfp((lat, rxyz, types, znucl),
+        fp_init = libfp.get_lfp((lat, rxyz, types, znucl),
                                 cutoff = cutoff, log = False, natx = nx)
-        fp_final = fplib.get_lfp((lat, rxyz_final, types, znucl),
+        fp_final = libfp.get_lfp((lat, rxyz_final, types, znucl),
                                 cutoff = cutoff, log = False, natx = nx)
-        e_init = fplib3.get_fpe(fp_init, ntyp, types)
-        e_final = fplib3.get_fpe(fp_final, ntyp, types)
+        e_init = get_fpe(fp_init, ntyp, types)
+        e_final = get_fpe(fp_final, ntyp, types)
         e_diff = e_final - e_init
         
         print ( "Numerical integral = {0:.6e}".format(del_fpe) )
