@@ -1,123 +1,126 @@
+import warnings
 import numpy as np
 import numba
 from numba import jit, njit, int32, float64
 from scipy.optimize import linear_sum_assignment
 
+@jit(nopython=True)
 def get_rcovdata():
-    dat = \
-    [[ 0  , "X" , 1.0],
-    [ 1  , "H"  , 0.37],  
-    [ 2  , "He" , 0.32],  
-    [ 3  , "Li" , 1.34],  
-    [ 4  , "Be" , 0.90],  
-    [ 5  , "B"  , 0.82],  
-    [ 6  , "C"  , 0.77],  
-    [ 7  , "N"  , 0.75],  
-    [ 8  , "O"  , 0.73],  
-    [ 9  , "F"  , 0.71],  
-    [ 10 , "Ne" , 0.69],  
-    [ 11 , "Na" , 1.54],  
-    [ 12 , "Mg" , 1.30],  
-    [ 13 , "Al" , 1.18],  
-    [ 14 , "Si" , 1.11],  
-    [ 15 , "P"  , 1.06],  
-    [ 16 , "S"  , 1.02],  
-    [ 17 , "Cl" , 0.99],  
-    [ 18 , "Ar" , 0.97],  
-    [ 19 , "K"  , 1.96],  
-    [ 20 , "Ca" , 1.74],  
-    [ 21 , "Sc" , 1.44],  
-    [ 22 , "Ti" , 1.36],  
-    [ 23 , "V"  , 1.25],  
-    [ 24 , "Cr" , 1.27],  
-    [ 25 , "Mn" , 1.39],  
-    [ 26 , "Fe" , 1.25],  
-    [ 27 , "Co" , 1.26],  
-    [ 28 , "Ni" , 1.21],  
-    [ 29 , "Cu" , 1.38],  
-    [ 30 , "Zn" , 1.31],  
-    [ 31 , "Ga" , 1.26],  
-    [ 32 , "Ge" , 1.22],  
-    [ 33 , "As" , 1.19],  
-    [ 34 , "Se" , 1.16],  
-    [ 35 , "Br" , 1.14],  
-    [ 36 , "Kr" , 1.10],  
-    [ 37 , "Rb" , 2.11],  
-    [ 38 , "Sr" , 1.92],  
-    [ 39 , "Y"  , 1.62],  
-    [ 40 , "Zr" , 1.48],  
-    [ 41 , "Nb" , 1.37],  
-    [ 42 , "Mo" , 1.45],  
-    [ 43 , "Tc" , 1.56],  
-    [ 44 , "Ru" , 1.26],  
-    [ 45 , "Rh" , 1.35],  
-    [ 46 , "Pd" , 1.31],  
-    [ 47 , "Ag" , 1.53],  
-    [ 48 , "Cd" , 1.48],  
-    [ 49 , "In" , 1.44],  
-    [ 50 , "Sn" , 1.41],  
-    [ 51 , "Sb" , 1.38],  
-    [ 52 , "Te" , 1.35],  
-    [ 53 , "I"  , 1.33],  
-    [ 54 , "Xe" , 1.30],  
-    [ 55 , "Cs" , 2.25],  
-    [ 56 , "Ba" , 1.98],  
-    [ 57 , "La" , 1.80],  
-    [ 58 , "Ce" , 1.63],  
-    [ 59 , "Pr" , 1.76],  
-    [ 60 , "Nd" , 1.74],  
-    [ 61 , "Pm" , 1.73],  
-    [ 62 , "Sm" , 1.72],  
-    [ 63 , "Eu" , 1.68],  
-    [ 64 , "Gd" , 1.69],  
-    [ 56 , "Tb" , 1.68],  
-    [ 66 , "Dy" , 1.67],  
-    [ 67 , "Ho" , 1.66],  
-    [ 68 , "Er" , 1.65],  
-    [ 69 , "Tm" , 1.64],  
-    [ 70 , "Yb" , 1.70],  
-    [ 71 , "Lu" , 1.60],  
-    [ 72 , "Hf" , 1.50],  
-    [ 73 , "Ta" , 1.38],  
-    [ 74 , "W"  , 1.46],  
-    [ 75 , "Re" , 1.59],  
-    [ 76 , "Os" , 1.28],  
-    [ 77 , "Ir" , 1.37],  
-    [ 78 , "Pt" , 1.28],  
-    [ 79 , "Au" , 1.44],  
-    [ 80 , "Hg" , 1.49],  
-    [ 81 , "Tl" , 1.48],  
-    [ 82 , "Pb" , 1.47],  
-    [ 83 , "Bi" , 1.46],  
-    [ 84 , "Po" , 1.45],  
-    [ 85 , "At" , 1.47],  
-    [ 86 , "Rn" , 1.42],  
-    [ 87 , "Fr" , 2.23],  
-    [ 88 , "Ra" , 2.01],  
-    [ 89 , "Ac" , 1.86],  
-    [ 90 , "Th" , 1.75],  
-    [ 91 , "Pa" , 1.69],  
-    [ 92 , "U"  , 1.70],  
-    [ 93 , "Np" , 1.71],  
-    [ 94 , "Pu" , 1.72],  
-    [ 95 , "Am" , 1.66],  
-    [ 96 , "Cm" , 1.66],  
-    [ 97 , "Bk" , 1.68],  
-    [ 98 , "Cf" , 1.68],  
-    [ 99 , "Es" , 1.65],  
-    [ 100, "Fm" , 1.67],  
-    [ 101, "Md" , 1.73],  
-    [ 102, "No" , 1.76],  
-    [ 103, "Lr" , 1.61],  
-    [ 104, "Rf" , 1.57],  
-    [ 105, "Db" , 1.49],  
-    [ 106, "Sg" , 1.43],  
-    [ 107, "Bh" , 1.41],  
-    [ 108, "Hs" , 1.34],  
-    [ 109, "Mt" , 1.29],  
-    [ 110, "Ds" , 1.28],  
-    [ 111, "Rg" , 1.21],  
-    [ 112, "Cn" , 1.22]]
+    dat = [
+        [0  , 1.0],   # X
+        [1  , 0.37],  # H
+        [2  , 0.32],  # He
+        [3  , 1.34],  # Li
+        [4  , 0.90],  # Be
+        [5  , 0.82],  # B
+        [6  , 0.77],  # C
+        [7  , 0.75],  # N
+        [8  , 0.73],  # O
+        [9  , 0.71],  # F
+        [10 , 0.69],  # Ne
+        [11 , 1.54],  # Na
+        [12 , 1.30],  # Mg
+        [13 , 1.18],  # Al
+        [14 , 1.11],  # Si
+        [15 , 1.06],  # P
+        [16 , 1.02],  # S
+        [17 , 0.99],  # Cl
+        [18 , 0.97],  # Ar
+        [19 , 1.96],  # K
+        [20 , 1.74],  # Ca
+        [21 , 1.44],  # Sc
+        [22 , 1.36],  # Ti
+        [23 , 1.25],  # V
+        [24 , 1.27],  # Cr
+        [25 , 1.39],  # Mn
+        [26 , 1.25],  # Fe
+        [27 , 1.26],  # Co
+        [28 , 1.21],  # Ni
+        [29 , 1.38],  # Cu
+        [30 , 1.31],  # Zn
+        [31 , 1.26],  # Ga
+        [32 , 1.22],  # Ge
+        [33 , 1.19],  # As
+        [34 , 1.16],  # Se
+        [35 , 1.14],  # Br
+        [36 , 1.10],  # Kr
+        [37 , 2.11],  # Rb
+        [38 , 1.92],  # Sr
+        [39 , 1.62],  # Y
+        [40 , 1.48],  # Zr
+        [41 , 1.37],  # Nb
+        [42 , 1.45],  # Mo
+        [43 , 1.56],  # Tc
+        [44 , 1.26],  # Ru
+        [45 , 1.35],  # Rh
+        [46 , 1.31],  # Pd
+        [47 , 1.53],  # Ag
+        [48 , 1.48],  # Cd
+        [49 , 1.44],  # In
+        [50 , 1.41],  # Sn
+        [51 , 1.38],  # Sb
+        [52 , 1.35],  # Te
+        [53 , 1.33],  # I
+        [54 , 1.30],  # Xe
+        [55 , 2.25],  # Cs
+        [56 , 1.98],  # Ba
+        [57 , 1.80],  # La
+        [58 , 1.63],  # Ce
+        [59 , 1.76],  # Pr
+        [60 , 1.74],  # Nd
+        [61 , 1.73],  # Pm
+        [62 , 1.72],  # Sm
+        [63 , 1.68],  # Eu
+        [64 , 1.69],  # Gd
+        [65 , 1.68],  # Tb
+        [66 , 1.67],  # Dy
+        [67 , 1.66],  # Ho
+        [68 , 1.65],  # Er
+        [69 , 1.64],  # Tm
+        [70 , 1.70],  # Yb
+        [71 , 1.60],  # Lu
+        [72 , 1.50],  # Hf
+        [73 , 1.38],  # Ta
+        [74 , 1.46],  # W
+        [75 , 1.59],  # Re
+        [76 , 1.28],  # Os
+        [77 , 1.37],  # Ir
+        [78 , 1.28],  # Pt
+        [79 , 1.44],  # Au
+        [80 , 1.49],  # Hg
+        [81 , 1.48],  # Tl
+        [82 , 1.47],  # Pb
+        [83 , 1.46],  # Bi
+        [84 , 1.45],  # Po
+        [85 , 1.47],  # At
+        [86 , 1.42],  # Rn
+        [87 , 2.23],  # Fr
+        [88 , 2.01],  # Ra
+        [89 , 1.86],  # Ac
+        [90 , 1.75],  # Th
+        [91 , 1.69],  # Pa
+        [92 , 1.70],  # U
+        [93 , 1.71],  # Np
+        [94 , 1.72],  # Pu
+        [95 , 1.66],  # Am
+        [96 , 1.66],  # Cm
+        [97 , 1.68],  # Bk
+        [98 , 1.68],  # Cf
+        [99 , 1.65],  # Es
+        [100, 1.67],  # Fm
+        [101, 1.73],  # Md
+        [102, 1.76],  # No
+        [103, 1.61],  # Lr
+        [104, 1.57],  # Rf
+        [105, 1.49],  # Db
+        [106, 1.43],  # Sg
+        [107, 1.41],  # Bh
+        [108, 1.34],  # Hs
+        [109, 1.29],  # Mt
+        [110, 1.28],  # Ds
+        [111, 1.21],  # Rg
+        [112, 1.22],  # Cn
+    ]
     
     return dat
 
@@ -466,6 +469,80 @@ def get_fpdist_nonperiodic(fp1, fp2):
     d = fp1 - fp2
     return np.sqrt(np.vdot(d, d))
 
+# @jit(nopython=True)
+@jit('(float64)(float64[:,:], float64[:,:], float64)', nopython=True)
+def count_atoms_within_cutoff(lat, rxyz, cutoff):
+    natoms = len(rxyz)
+    count = 0
+    
+    ixyzf = get_ixyz(lat, cutoff)
+    ixyz = int(ixyzf) + 1
+
+    for iat in range(natoms):
+        xi, yi, zi = rxyz[iat]
+
+        for jat in range(natoms):
+            if jat == iat:
+                continue  # Skip the same atom
+
+            for ix in range(-ixyz, ixyz + 1):
+                for iy in range(-ixyz, ixyz + 1):
+                    for iz in range(-ixyz, ixyz + 1):
+                        
+                        xj = rxyz[jat][0] + ix * lat[0][0] + iy * lat[1][0] + iz * lat[2][0]
+                        yj = rxyz[jat][1] + ix * lat[0][1] + iy * lat[1][1] + iz * lat[2][1]
+                        zj = rxyz[jat][2] + ix * lat[0][2] + iy * lat[1][2] + iz * lat[2][2]
+                        
+                        d2 = (xj - xi) ** 2 + (yj - yi) ** 2 + (zj - zi) ** 2
+                        
+                        if d2 < cutoff ** 2:
+                            count += 1
+                            break  # Only need to count one image per jat
+
+    return count
+
+def recommend_cutoff_and_nx(lat, rxyz, initial_cutoff=5.0, max_cutoff=10.0, step=0.5):
+    """
+    Recommend a suitable `cutoff` and `nx` value based on lattice and atomic positions.
+    
+    Parameters:
+    lat: numpy.ndarray
+        Lattice matrix.
+    rxyz: numpy.ndarray
+        Positions of atoms in the unit cell.
+    types: numpy.ndarray
+        Atomic types.
+    znucl: numpy.ndarray
+        Atomic numbers (znucl).
+    initial_cutoff: float
+        Starting value for the cutoff radius.
+    max_cutoff: float
+        Maximum cutoff radius to try.
+    step: float
+        Step size to increase the cutoff.
+    
+    Returns:
+    tuple:
+        Recommended cutoff and nx.
+    """
+    cutoff = initial_cutoff
+    best_cutoff = initial_cutoff
+    best_nx = 0
+    
+    lat = np.array(lat, dtype = np.float64)
+    rxyz = np.array(rxyz, dtype = np.float64)
+    
+    while cutoff <= max_cutoff:
+        cutoff = np.float64(cutoff)
+        max_atoms_in_sphere = count_atoms_within_cutoff(lat, rxyz, cutoff)
+        if max_atoms_in_sphere > best_nx:
+            best_nx = max_atoms_in_sphere
+            best_cutoff = cutoff
+
+        cutoff += step
+
+    return best_cutoff, best_nx
+
 @jit('Tuple((float64[:,:], float64[:,:,:,:]))(float64[:,:], float64[:,:], int32[:], int32[:], \
       boolean, boolean, int32, int32, int32, float64)', nopython=True)
 def get_fp(lat, rxyz, types, znucl,
@@ -482,121 +559,9 @@ def get_fp(lat, rxyz, types, znucl,
         lseg = 4
         l = 2
     
-    rcovdata =  [[ 0 ,  1.0],
-                [ 1  ,  0.37],
-                [ 2  ,  0.32],
-                [ 3  ,  1.34],
-                [ 4  ,  0.90],
-                [ 5  ,  0.82],
-                [ 6  ,  0.77],
-                [ 7  ,  0.75],
-                [ 8  ,  0.73],
-                [ 9  ,  0.71],
-                [ 10 ,  0.69],
-                [ 11 ,  1.54],
-                [ 12 ,  1.30],
-                [ 13 ,  1.18],
-                [ 14 ,  1.11],
-                [ 15 ,  1.06],
-                [ 16 ,  1.02],
-                [ 17 ,  0.99],
-                [ 18 ,  0.97],
-                [ 19 ,  1.96],
-                [ 20 ,  1.74],
-                [ 21 ,  1.44],
-                [ 22 ,  1.36],
-                [ 23 ,  1.25],
-                [ 24 ,  1.27],
-                [ 25 ,  1.39],
-                [ 26 ,  1.25],
-                [ 27 ,  1.26],
-                [ 28 ,  1.21],
-                [ 29 ,  1.38],
-                [ 30 ,  1.31],
-                [ 31 ,  1.26],
-                [ 32 ,  1.22],
-                [ 33 ,  1.19],
-                [ 34 ,  1.16],
-                [ 35 ,  1.14],
-                [ 36 ,  1.10],
-                [ 37 ,  2.11],
-                [ 38 ,  1.92],
-                [ 39 ,  1.62],
-                [ 40 ,  1.48],
-                [ 41 ,  1.37],
-                [ 42 ,  1.45],
-                [ 43 ,  1.56],
-                [ 44 ,  1.26],
-                [ 45 ,  1.35],
-                [ 46 ,  1.31],
-                [ 47 ,  1.53],
-                [ 48 ,  1.48],
-                [ 49 ,  1.44],
-                [ 50 ,  1.41],
-                [ 51 ,  1.38],
-                [ 52 ,  1.35],
-                [ 53 ,  1.33],
-                [ 54 ,  1.30],
-                [ 55 ,  2.25],
-                [ 56 ,  1.98],
-                [ 57 ,  1.80],
-                [ 58 ,  1.63],
-                [ 59 ,  1.76],
-                [ 60 ,  1.74],
-                [ 61 ,  1.73],
-                [ 62 ,  1.72],
-                [ 63 ,  1.68],
-                [ 64 ,  1.69],
-                [ 56 ,  1.68],
-                [ 66 ,  1.67],
-                [ 67 ,  1.66],
-                [ 68 ,  1.65],
-                [ 69 ,  1.64],
-                [ 70 ,  1.70],
-                [ 71 ,  1.60],
-                [ 72 ,  1.50],
-                [ 73 ,  1.38],
-                [ 74 ,  1.46],
-                [ 75 ,  1.59],
-                [ 76 ,  1.28],
-                [ 77 ,  1.37],
-                [ 78 ,  1.28],
-                [ 79 ,  1.44],
-                [ 80 ,  1.49],
-                [ 81 ,  1.48],
-                [ 82 ,  1.47],
-                [ 83 ,  1.46],
-                [ 84 ,  1.45],
-                [ 85 ,  1.47],
-                [ 86 ,  1.42],
-                [ 87 ,  2.23],
-                [ 88 ,  2.01],
-                [ 89 ,  1.86],
-                [ 90 ,  1.75],
-                [ 91 ,  1.69],
-                [ 92 ,  1.70],
-                [ 93 ,  1.71],
-                [ 94 ,  1.72],
-                [ 95 ,  1.66],
-                [ 96 ,  1.66],
-                [ 97 ,  1.68],
-                [ 98 ,  1.68],
-                [ 99 ,  1.65],
-                [ 100,  1.67],
-                [ 101,  1.73],
-                [ 102,  1.76],
-                [ 103,  1.61],
-                [ 104,  1.57],
-                [ 105,  1.49],
-                [ 106,  1.43],
-                [ 107,  1.41],
-                [ 108,  1.34],
-                [ 109,  1.29],
-                [ 110,  1.28],
-                [ 111,  1.21],
-                [ 112,  1.22]]
-    
     #Modified so that now a float is returned and converted into an int
+    rcovdata = get_rcovdata()
+    
     ixyzf = get_ixyz(lat, cutoff)
     ixyz = int(ixyzf) + 1
     NC = 2
@@ -634,8 +599,14 @@ def get_fp(lat, rxyz, types, znucl,
                         if d2 <= cutoff2:
                             n_sphere += 1
                             if n_sphere > nx:
-                                raise Exception("FP WARNING: Cutoff radius is too large, \
-                                                increase nx or decrease cutoff.")
+                                best_cutoff, best_nx = \
+                                recommend_cutoff_and_nx(lat, 
+                                                        rxyz, 
+                                                        initial_cutoff=3.0, 
+                                                        max_cutoff=cutoff, 
+                                                        step=0.5)
+                                warnings.warn("Cutoff radius is too large, automatically decreasing. Recommended cutoff: {best_cutoff}, Recommended nx: {best_nx}")
+                                cutoff = best_cutoff # Reset cutoff
                             # amp.append((1.0-d2*fc)**NC)
                             # nd2 = d2/cutoff2
                             ampt = (1.0-d2*fc)**(NC-1)
