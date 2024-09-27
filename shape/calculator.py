@@ -10,7 +10,6 @@ try:
     use_numba = True
 except ImportError:
     use_numba = False
-
     # Define dummy decorator and type aliases if Numba is not available
     def jit(*args, **kwargs):
         return lambda func: func
@@ -431,10 +430,10 @@ class SHAPE_Calculator(Calculator):
         cutoff = self.cutoff
         types = self.types
         znucl = self.znucl
-
-        # write_vasp('input.vasp', atoms, direct=True)
+        
         lat = atoms.cell[:]
         rxyz = atoms.get_positions()
+        
         lat = np.array(lat, dtype = np.float64)
         rxyz = np.array(rxyz, dtype = np.float64)
         types = np.int32(types)
@@ -443,11 +442,13 @@ class SHAPE_Calculator(Calculator):
         nx = np.int32(nx)
         lmax = np.int32(lmax)
         cutoff = np.float64(cutoff)   
+        
         rxyz_delta = np.zeros_like(rxyz)
         rxyz_disp = np.zeros_like(rxyz)
         rxyz_left = np.zeros_like(rxyz)
         rxyz_mid = np.zeros_like(rxyz)
         rxyz_right = np.zeros_like(rxyz)
+        
         nat = len(rxyz)
         del_fpe = 0.0
         iter_max = 100

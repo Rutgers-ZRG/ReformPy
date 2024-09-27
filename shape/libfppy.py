@@ -522,10 +522,6 @@ def recommend_cutoff_and_nx(lat, rxyz, initial_cutoff=5.0, max_cutoff=10.0, step
         Lattice matrix.
     rxyz: numpy.ndarray
         Positions of atoms in the unit cell.
-    types: numpy.ndarray
-        Atomic types.
-    znucl: numpy.ndarray
-        Atomic numbers (znucl).
     initial_cutoff: float
         Starting value for the cutoff radius.
     max_cutoff: float
@@ -541,8 +537,8 @@ def recommend_cutoff_and_nx(lat, rxyz, initial_cutoff=5.0, max_cutoff=10.0, step
     best_cutoff = initial_cutoff
     best_nx = 0
     
-    lat = np.array(lat, dtype = np.float64)
-    rxyz = np.array(rxyz, dtype = np.float64)
+    # lat = np.array(lat, dtype = np.float64)
+    # rxyz = np.array(rxyz, dtype = np.float64)
     
     while cutoff <= max_cutoff:
         cutoff = np.float64(cutoff)
@@ -554,6 +550,37 @@ def recommend_cutoff_and_nx(lat, rxyz, initial_cutoff=5.0, max_cutoff=10.0, step
         cutoff += step
 
     return best_cutoff, best_nx
+
+@jit(nopython=True)
+def shrink_cutoff(lat, rxyz, types, znucl, iat, nx, initial_cutoff):
+    # Start with a cutoff slightly smaller than the current value
+    step = 0.5  # Amount to shrink the cutoff
+    cutoff = initial_cutoff - step
+
+    while True:
+        n_sphere = 0
+        cutoff2 = cutoff ** 2
+        ixyzf = get_ixyz(lat, cutoff)
+        ixyz = int(ixyzf) + 1
+
+        for jat in range(len(rxyz)):
+            for ix in range(-ixyz, ixyz + 1):
+                for iy in range(-ixyz, ixyz + 1):
+                    for iz in range(-ixyz, ixyz + 1):
+                        xj = rxyz[jat][0] + ix * lat[0][0] + iy * lat[1][0] + iz * lat[2][0]
+                        yj = rxyz[jat][1] + ix * lat[0][1] + iy * lat[1][1] + iz * lat[2][1]
+                        zj = rxyz[jat][2] + ix * lat[0][2] + iy * lat[1][2] + iz * lat[2][2]
+                        d2 = (xj - rxyz[iat][0]) ** 2 + (yj - rxyz[iat][1]) ** 2 + (zj - rxyz[iat][2]) ** 2
+
+                        if d2 <= cutoff2:
+                            n_sphere += 1
+                            if n_sphere > nx:
+                                break
+
+        if n_sphere <= nx:
+            return cutoff
+        else:
+            cutoff -= step  # Reduce the cutoff further if necessary
 
 @jit('Tuple((float64[:,:], float64[:,:,:,:]))(float64[:,:], float64[:,:], int32[:], int32[:], \
       boolean, boolean, int32, int32, int32, float64)', nopython=True)
@@ -571,7 +598,7 @@ def get_fp(lat, rxyz, types, znucl,
         lseg = 4
         l = 2
     
-    #Modified so that now a float is returned and converted into an int
+    # Modified the way to get rcov
     rcovdata = get_rcovdata()
     
     ixyzf = get_ixyz(lat, cutoff)
@@ -587,6 +614,7 @@ def get_fp(lat, rxyz, types, znucl,
     sfp = []
     dfp = np.zeros((nat, nat, 3, lseg*nx), dtype = np.float64)
     for iat in range(nat):
+        neighbors = []
         rxyz_sphere = []
         rcov_sphere = []
         alpha = []
@@ -610,39 +638,35 @@ def get_fp(lat, rxyz, types, znucl,
                         d2 = (xj-xi)**2 + (yj-yi)**2 + (zj-zi)**2
                         if d2 <= cutoff2:
                             n_sphere += 1
-                            if n_sphere > nx:
-                                best_cutoff, best_nx = \
-                                recommend_cutoff_and_nx(lat, 
-                                                        rxyz, 
-                                                        initial_cutoff=3.0, 
-                                                        max_cutoff=cutoff, 
-                                                        step=0.5)
-                                warnings.warn("Cutoff radius is too large, automatically decreasing. Recommended cutoff: {best_cutoff}, Recommended nx: {best_nx}")
-                                cutoff = best_cutoff # Reset cutoff
-                            # amp.append((1.0-d2*fc)**NC)
-                            # nd2 = d2/cutoff2
-                            ampt = (1.0-d2*fc)**(NC-1)
-                            amp.append(ampt * (1.0-d2*fc))
-                            damp.append(-2.0 * fc * NC * ampt)
-                            indori.append(jat)
-                            # amp.append(1.0)
-                            # print (1.0-d2*fc)**NC
-                            rxyz_sphere.append([xj, yj, zj])
-                            rcov_sphere.append(rcovj)
-                            alpha.append(0.5 / rcovj**2)
-                            if jat == iat and ix == 0 and iy == 0 and iz == 0:
-                                ityp_sphere = 0
-                                icenter = n_sphere-1
-                            else:
-                                ityp_sphere = types[jat]
-                            for il in range(lseg):
-                                if il == 0:
-                                    # print len(ind)
-                                    # print ind
-                                    # print il+lseg*(n_sphere-1)
-                                    ind[il+lseg*(n_sphere-1)] = ityp_sphere * l
-                                else:
-                                    ind[il+lseg*(n_sphere-1)] = ityp_sphere * l + 1
+                            neighbors.append((d2, jat, [xj, yj, zj], rcovj))  # Collect all neighbors
+        # Sort neighbors by distance (d2)
+        neighbors.sort(key=lambda x: x[0])
+        # Chop neighbors to `nx` if `n_sphere` exceeds `nx`
+        if n_sphere > nx:
+            neighbors = neighbors[:nx]
+        
+        # Process each neighbor
+        for n, (d2, jat, rxyz_j, rcovj) in enumerate(neighbors):
+            ampt = (1.0 - d2 * fc) ** (NC - 1)
+            amp.append(ampt * (1.0 - d2 * fc))
+            damp.append(-2.0 * fc * NC * ampt)
+            indori.append(jat)
+            rxyz_sphere.append(rxyz_j)
+            rcov_sphere.append(rcovj)
+            alpha.append(0.5 / rcovj**2)
+
+            if jat == iat and n == 0:
+                ityp_sphere = 0
+                icenter = n
+            else:
+                ityp_sphere = types[jat]
+
+            for il in range(lseg):
+                if il == 0:
+                    ind[il + lseg * n] = ityp_sphere * l
+                else:
+                    ind[il + lseg * n] = ityp_sphere * l + 1
+
         n_sphere_list.append(n_sphere)
         rxyz_sphere = np.array(rxyz_sphere)
         # full overlap matrix
@@ -656,10 +680,9 @@ def get_fp(lat, rxyz, types, znucl,
             # print (val[i])
             fp0[i] = val[len(val)-1-i]
         # fp0 = fp0/np.linalg.norm(fp0)
-        # np.append(lfp, fp0)
+        
         lfp[iat] = fp0
-        # pvec = np.real(np.transpose(vec)[0])
-
+        
         vectmp = np.transpose(vec)
         vecs = []
         for i in range(len(vectmp)):
@@ -691,26 +714,16 @@ def get_fp(lat, rxyz, types, znucl,
             omx = np.zeros((nids, nids))
             for i in range(nid):
                 for j in range(nid):
-                    # print ind[i], ind[j]
                     omx[ind[i]][ind[j]] = omx[ind[i]][ind[j]] + pvec[i] * gom[i][j] * pvec[j]
-            # for i in range(nids):
-            #     for j in range(nids):
-            #         if abs(omx[i][j] - omx[j][i]) > 1e-6:
-            #             print ("ERROR", i, j, omx[i][j], omx[j][i])
-            # print omx
             sfp0 = np.linalg.eigvals(omx)
             sfp.append(sorted(sfp0))
-
-
-    # print ("n_sphere_min", min(n_sphere_list))
-    # print ("n_shpere_max", max(n_sphere_list))
-
+    
     if contract:
         # sfp = np.array(sfp, dtype = np.float64)
         # dfp = np.array(dfp, dtype = np.float64)
         sfp = np.array(sfp)
         return sfp, dfp
-
+    
     else:
         # lfp = np.array(lfp, dtype = np.float64)
         # dfp = np.array(dfp, dtype = np.float64)
@@ -771,6 +784,14 @@ def get_lfp(cell,
     ldfp = False
     nx = natx
     ntyp = len(set(types))
+    lat = np.array(lat, dtype = np.float64)
+    rxyz = np.array(rxyz, dtype = np.float64)
+    types = np.int32(types)
+    znucl =  np.int32(znucl)
+    ntyp =  np.int32(ntyp)
+    nx = np.int32(nx)
+    lmax = np.int32(lmax)
+    cutoff = np.float64(cutoff)
     lfp, _ = get_fp(lat, rxyz, types, znucl, contract, ldfp, ntyp, nx, lmax, cutoff)
     return np.array(lfp)
 
@@ -800,6 +821,14 @@ def get_sfp(cell,
     ldfp = False
     nx = natx
     ntyp = len(set(types))
+    lat = np.array(lat, dtype = np.float64)
+    rxyz = np.array(rxyz, dtype = np.float64)
+    types = np.int32(types)
+    znucl =  np.int32(znucl)
+    ntyp =  np.int32(ntyp)
+    nx = np.int32(nx)
+    lmax = np.int32(lmax)
+    cutoff = np.float64(cutoff)
     sfp, _ = get_fp(lat, rxyz, types, znucl, contract, ldfp, ntyp, nx, lmax, cutoff)
     return np.array(sfp)
 
@@ -828,6 +857,12 @@ def get_dfp(cell,
     ldfp = True
     nx = natx
     ntyp = len(set(types))
+    types = np.int32(types)
+    znucl =  np.int32(znucl)
+    ntyp =  np.int32(ntyp)
+    nx = np.int32(nx)
+    lmax = np.int32(lmax)
+    cutoff = np.float64(cutoff)
     lfp, dfp = get_fp(lat, rxyz, types, znucl, contract, ldfp, ntyp, nx, lmax, cutoff)
     return np.array(lfp), np.array(dfp)
 
