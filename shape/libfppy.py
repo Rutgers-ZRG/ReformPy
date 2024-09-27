@@ -13,7 +13,7 @@ except ImportError:
     # Define dummy decorator and type aliases if Numba is not available
     def jit(*args, **kwargs):
         return lambda func: func
-    
+
     float64 = int32 = lambda: None
 
 @jit(nopython=True)
@@ -133,7 +133,7 @@ def get_rcovdata():
         [111, 1.21],  # Rg
         [112, 1.22],  # Cn
     ]
-    
+
     return dat
 
 @jit('(float64)(int32, int32)', nopython=True)
@@ -178,7 +178,7 @@ def get_ixyz(lat, cutoff):
 #         for line in f:
 #             buff.append(line.split())
 
-#     lat = np.array(buff[2:5], float) 
+#     lat = np.array(buff[2:5], float)
 #     try:
 #         typt = np.array(buff[5], int)
 #     except:
@@ -216,7 +216,7 @@ def get_ixyz(lat, cutoff):
 @jit(nopython=True)
 def get_gom(lseg, rxyz, alpha, amp):
     # s orbital only lseg == 1
-    nat = len(rxyz)    
+    nat = len(rxyz)
     if lseg == 1:
         om = np.zeros((nat, nat), dtype = np.float64)
         mamp = np.zeros((nat, nat), dtype = np.float64)
@@ -239,26 +239,26 @@ def get_gom(lseg, rxyz, alpha, amp):
                 d2 = np.vdot(d, d)
                 t1 = alpha[iat] * alpha[jat]
                 t2 = alpha[iat] + alpha[jat]
-                
+
                 # <s_i | s_j>
                 sij = np.sqrt(2.0*np.sqrt(t1)/t2)**3 * np.exp(-t1/t2*d2)
                 om[4*iat][4*jat] = sij
                 mamp[4*iat][4*jat] = amp[iat]*amp[jat]
-                
+
                 # <s_i | p_j>
                 stv = 2.0 * (1/np.sqrt(alpha[jat])) * (t1/t2) * sij
-                om[4*iat][4*jat+1] = stv * d[0] 
-                om[4*iat][4*jat+2] = stv * d[1] 
-                om[4*iat][4*jat+3] = stv * d[2]  
-                
+                om[4*iat][4*jat+1] = stv * d[0]
+                om[4*iat][4*jat+2] = stv * d[1]
+                om[4*iat][4*jat+3] = stv * d[2]
+
                 mamp[4*iat][4*jat+1] = amp[iat]*amp[jat]
                 mamp[4*iat][4*jat+2] = amp[iat]*amp[jat]
                 mamp[4*iat][4*jat+3] = amp[iat]*amp[jat]
-                # <p_i | s_j> 
+                # <p_i | s_j>
                 stv = -2.0 * (1/np.sqrt(alpha[iat])) * (t1/t2) * sij
-                om[4*iat+1][4*jat] = stv * d[0] 
-                om[4*iat+2][4*jat] = stv * d[1] 
-                om[4*iat+3][4*jat] = stv * d[2] 
+                om[4*iat+1][4*jat] = stv * d[0]
+                om[4*iat+2][4*jat] = stv * d[1]
+                om[4*iat+3][4*jat] = stv * d[2]
 
                 mamp[4*iat+1][4*jat] = amp[iat]*amp[jat]
                 mamp[4*iat+2][4*jat] = amp[iat]*amp[jat]
@@ -268,26 +268,26 @@ def get_gom(lseg, rxyz, alpha, amp):
                 # stv = -8.0 * rcov[iat] * rcov[jat] * r * r * sji
                 stv = 2.0 * np.sqrt(t1)/t2 * sij
                 sx = -2.0*t1/t2
-                
+
                 for i_pp in range(3):
                     for j_pp in range(3):
                         om[4*iat+i_pp+1][4*jat+j_pp+1] = stv * (sx * d[i_pp] * d[j_pp] + \
                                                                 kron_delta(i_pp, j_pp))
-                
+
                 for i_pp in range(3):
                     for j_pp in range(3):
                         mamp[4*iat+i_pp+1][4*jat+j_pp+1] = amp[iat]*amp[jat]
-                
+
                 '''
-                om[4*iat+1][4*jat+1] = stv * (sx * d[0] * d[0] + 1.0) 
-                om[4*iat+1][4*jat+2] = stv * (sx * d[1] * d[0]      ) 
-                om[4*iat+1][4*jat+3] = stv * (sx * d[2] * d[0]      ) 
-                om[4*iat+2][4*jat+1] = stv * (sx * d[0] * d[1]      ) 
-                om[4*iat+2][4*jat+2] = stv * (sx * d[1] * d[1] + 1.0) 
-                om[4*iat+2][4*jat+3] = stv * (sx * d[2] * d[1]      ) 
-                om[4*iat+3][4*jat+1] = stv * (sx * d[0] * d[2]      ) 
-                om[4*iat+3][4*jat+2] = stv * (sx * d[1] * d[2]      ) 
-                om[4*iat+3][4*jat+3] = stv * (sx * d[2] * d[2] + 1.0) 
+                om[4*iat+1][4*jat+1] = stv * (sx * d[0] * d[0] + 1.0)
+                om[4*iat+1][4*jat+2] = stv * (sx * d[1] * d[0]      )
+                om[4*iat+1][4*jat+3] = stv * (sx * d[2] * d[0]      )
+                om[4*iat+2][4*jat+1] = stv * (sx * d[0] * d[1]      )
+                om[4*iat+2][4*jat+2] = stv * (sx * d[1] * d[1] + 1.0)
+                om[4*iat+2][4*jat+3] = stv * (sx * d[2] * d[1]      )
+                om[4*iat+3][4*jat+1] = stv * (sx * d[0] * d[2]      )
+                om[4*iat+3][4*jat+2] = stv * (sx * d[1] * d[2]      )
+                om[4*iat+3][4*jat+3] = stv * (sx * d[2] * d[2] + 1.0)
 
                 mamp[4*iat+1][4*jat+1] = amp[iat]*amp[jat]
                 mamp[4*iat+1][4*jat+2] = amp[iat]*amp[jat]
@@ -299,7 +299,7 @@ def get_gom(lseg, rxyz, alpha, amp):
                 mamp[4*iat+3][4*jat+2] = amp[iat]*amp[jat]
                 mamp[4*iat+3][4*jat+3] = amp[iat]*amp[jat]
                 '''
-    
+
     # for i in range(len(om)):
     #     for j in range(len(om)):
     #         if abs(om[i][j] - om[j][i]) > 1e-6:
@@ -316,7 +316,7 @@ def get_gom(lseg, rxyz, alpha, amp):
 #       float64[:], float64[:,:], float64[:], int32)', nopython=True)
 @jit(nopython=True)
 def get_dgom(lseg, gom, amp, damp, rxyz, alpha, icenter):
-    nat = len(rxyz)    
+    nat = len(rxyz)
     if lseg == 1:
         # s orbital only lseg == 1
         di = np.empty(3, dtype = np.float64)
@@ -332,16 +332,16 @@ def get_dgom(lseg, gom, amp, damp, rxyz, alpha, icenter):
                 tt = 2.0 * t1 / t2
                 dic = rxyz[iat] - rxyz[icenter]
                 djc = rxyz[jat] - rxyz[icenter]
-                
+
                 pij = amp[iat] * amp[jat]
                 dipj = damp[iat] * amp[jat]
                 djpi = damp[jat] * amp[iat]
-                
+
                 for k in range(3):
                     di[k] = -pij * tt * gom[iat][jat] * d[k] + dipj * gom[iat][jat] * dic[k]
                     dj[k] = +pij * tt * gom[iat][jat] * d[k] + djpi * gom[iat][jat] * djc[k]
                     dc[k] = -dipj * gom[iat][jat] * dic[k] - djpi * gom[iat][jat] * djc[k]
-                    
+
                     dgom[iat][k][iat][jat] += di[k]
                     dgom[jat][k][iat][jat] += dj[k]
                     dgom[icenter][k][iat][jat] += dc[k]
@@ -369,11 +369,11 @@ def get_dgom(lseg, gom, amp, damp, rxyz, alpha, icenter):
                 tt = 2.0 * t1 / t2
                 dic = rxyz[iat] - rxyz[icenter]
                 djc = rxyz[jat] - rxyz[icenter]
-                
+
                 pij = amp[iat] * amp[jat]
                 dipj = damp[iat] * amp[jat]
                 djpi = damp[jat] * amp[iat]
-                
+
                 # <s_i | s_j>
                 for k_ss in range(3):
                     dss_i[k_ss] = -pij * tt * gom[4*iat][4*jat] * d[k_ss] + dipj * \
@@ -382,11 +382,11 @@ def get_dgom(lseg, gom, amp, damp, rxyz, alpha, icenter):
                     gom[4*iat][4*jat] * djc[k_ss]
                     dss_c[k_ss] = -dipj * gom[4*iat][4*jat] * dic[k_ss] - djpi * \
                     gom[4*iat][4*jat] * djc[k_ss]
-                    
+
                     dgom[iat][k_ss][4*iat][4*jat] += dss_i[k_ss]
                     dgom[jat][k_ss][4*iat][4*jat] += dss_j[k_ss]
                     dgom[icenter][k_ss][4*iat][4*jat] += dss_c[k_ss]
-                
+
                 # <s_i | p_j>
                 for k_sp in range(3):
                     for i_sp in range(3):
@@ -395,20 +395,20 @@ def get_dgom(lseg, gom, amp, damp, rxyz, alpha, icenter):
                         (1/np.sqrt(alpha[jat]))* pij * tt ** 2 * \
                         np.multiply(d[k_sp], d[i_sp]) * gom[4*iat][4*jat] + \
                         dipj * gom[4*iat][4*jat+i_sp+1] * dic[k_sp]
-                        
+
                         dsp_j[k_sp][i_sp] = -(1/np.sqrt(alpha[jat])) * pij * tt * \
                         kron_delta(k_sp, i_sp) * gom[4*iat][4*jat] + \
                         (1/np.sqrt(alpha[jat]))* pij * tt ** 2 * \
                         np.multiply(d[k_sp], d[i_sp]) * gom[4*iat][4*jat] + \
                         djpi * gom[4*iat][4*jat+i_sp+1] * djc[k_sp]
-                        
+
                         dsp_c[k_sp][i_sp] = -dipj * gom[4*iat][4*jat+i_sp+1] * dic[k_sp] - \
                         djpi * gom[4*iat][4*jat+i_sp+1] * djc[k_sp]
-                        
+
                         dgom[iat][k_sp][4*iat][4*jat+i_sp+1] += dsp_i[k_sp][i_sp]
                         dgom[jat][k_sp][4*iat][4*jat+i_sp+1] += dsp_j[k_sp][i_sp]
                         dgom[icenter][k_sp][4*iat][4*jat+i_sp+1] += dsp_c[k_sp][i_sp]
-                
+
                 # <p_i | s_j>
                 for k_ps in range(3):
                     for i_ps in range(3):
@@ -417,20 +417,20 @@ def get_dgom(lseg, gom, amp, damp, rxyz, alpha, icenter):
                         (1/np.sqrt(alpha[iat]))* pij * tt ** 2 * \
                         np.multiply(d[k_ps], d[i_ps]) * gom[4*iat][4*jat] + \
                         dipj * gom[4*iat+i_ps+1][4*jat] * dic[k_ps]
-                        
+
                         dps_j[k_ps][i_ps] = +(1/np.sqrt(alpha[iat])) * pij * tt * \
                         kron_delta(k_ps, i_ps) * gom[4*iat][4*jat] - \
                         (1/np.sqrt(alpha[iat]))* pij * tt ** 2 * \
                         np.multiply(d[k_ps], d[i_ps]) * gom[4*iat][4*jat] + \
                         djpi * gom[4*iat+i_ps+1][4*jat] * djc[k_ps]
-                        
+
                         dps_c[k_ps][i_ps] = -dipj * gom[4*iat+i_ps+1][4*jat] * dic[k_ps] - \
                         djpi * gom[4*iat+i_ps+1][4*jat] * djc[k_ps]
-                        
+
                         dgom[iat][k_ps][4*iat+i_ps+1][4*jat] += dps_i[k_ps][i_ps]
                         dgom[jat][k_ps][4*iat+i_ps+1][4*jat] += dps_j[k_ps][i_ps]
                         dgom[icenter][k_ps][4*iat+i_ps+1][4*jat] += dps_c[k_ps][i_ps]
-                
+
                 # <p_i | p_j>
                 for k_pp in range(3):
                     for i_pp in range(3):
@@ -458,8 +458,8 @@ def get_dgom(lseg, gom, amp, damp, rxyz, alpha, icenter):
                             dgom[jat][k_pp][4*iat+i_pp+1][4*jat+j_pp+1] += dpp_j[k_pp][i_pp][j_pp]
                             dgom[icenter][k_pp][4*iat+i_pp+1][4*jat+j_pp+1] += \
                                                                            dpp_c[k_pp][i_pp][j_pp]
-                
-                
+
+
     return dgom
 
 # @jit('(float64[:])(float64[:,:], int32[:])', nopython=True)
@@ -486,7 +486,7 @@ def get_fpdist_nonperiodic(fp1, fp2):
 def count_atoms_within_cutoff(lat, rxyz, cutoff):
     natoms = len(rxyz)
     count = 0
-    
+
     ixyzf = get_ixyz(lat, cutoff)
     ixyz = int(ixyzf) + 1
 
@@ -500,13 +500,13 @@ def count_atoms_within_cutoff(lat, rxyz, cutoff):
             for ix in range(-ixyz, ixyz + 1):
                 for iy in range(-ixyz, ixyz + 1):
                     for iz in range(-ixyz, ixyz + 1):
-                        
+
                         xj = rxyz[jat][0] + ix * lat[0][0] + iy * lat[1][0] + iz * lat[2][0]
                         yj = rxyz[jat][1] + ix * lat[0][1] + iy * lat[1][1] + iz * lat[2][1]
                         zj = rxyz[jat][2] + ix * lat[0][2] + iy * lat[1][2] + iz * lat[2][2]
-                        
+
                         d2 = (xj - xi) ** 2 + (yj - yi) ** 2 + (zj - zi) ** 2
-                        
+
                         if d2 < cutoff ** 2:
                             count += 1
                             break  # Only need to count one image per jat
@@ -516,7 +516,7 @@ def count_atoms_within_cutoff(lat, rxyz, cutoff):
 def recommend_cutoff_and_nx(lat, rxyz, initial_cutoff=5.0, max_cutoff=10.0, step=0.5):
     """
     Recommend a suitable `cutoff` and `nx` value based on lattice and atomic positions.
-    
+
     Parameters:
     lat: numpy.ndarray
         Lattice matrix.
@@ -528,7 +528,7 @@ def recommend_cutoff_and_nx(lat, rxyz, initial_cutoff=5.0, max_cutoff=10.0, step
         Maximum cutoff radius to try.
     step: float
         Step size to increase the cutoff.
-    
+
     Returns:
     tuple:
         Recommended cutoff and nx.
@@ -536,10 +536,10 @@ def recommend_cutoff_and_nx(lat, rxyz, initial_cutoff=5.0, max_cutoff=10.0, step
     cutoff = initial_cutoff
     best_cutoff = initial_cutoff
     best_nx = 0
-    
-    # lat = np.array(lat, dtype = np.float64)
-    # rxyz = np.array(rxyz, dtype = np.float64)
-    
+
+    lat = np.array(lat, dtype = np.float64)
+    rxyz = np.array(rxyz, dtype = np.float64)
+
     while cutoff <= max_cutoff:
         cutoff = np.float64(cutoff)
         max_atoms_in_sphere = count_atoms_within_cutoff(lat, rxyz, cutoff)
@@ -597,10 +597,10 @@ def get_fp(lat, rxyz, types, znucl,
     else:
         lseg = 4
         l = 2
-    
+
     # Modified the way to get rcov
     rcovdata = get_rcovdata()
-    
+
     ixyzf = get_ixyz(lat, cutoff)
     ixyz = int(ixyzf) + 1
     NC = 2
@@ -644,7 +644,7 @@ def get_fp(lat, rxyz, types, znucl,
         # Chop neighbors to `nx` if `n_sphere` exceeds `nx`
         if n_sphere > nx:
             neighbors = neighbors[:nx]
-        
+
         # Process each neighbor
         for n, (d2, jat, rxyz_j, rcovj) in enumerate(neighbors):
             ampt = (1.0 - d2 * fc) ** (NC - 1)
@@ -680,9 +680,9 @@ def get_fp(lat, rxyz, types, znucl,
             # print (val[i])
             fp0[i] = val[len(val)-1-i]
         # fp0 = fp0/np.linalg.norm(fp0)
-        
+
         lfp[iat] = fp0
-        
+
         vectmp = np.transpose(vec)
         vecs = []
         for i in range(len(vectmp)):
@@ -717,13 +717,13 @@ def get_fp(lat, rxyz, types, znucl,
                     omx[ind[i]][ind[j]] = omx[ind[i]][ind[j]] + pvec[i] * gom[i][j] * pvec[j]
             sfp0 = np.linalg.eigvals(omx)
             sfp.append(sorted(sfp0))
-    
+
     if contract:
         # sfp = np.array(sfp, dtype = np.float64)
         # dfp = np.array(dfp, dtype = np.float64)
         sfp = np.array(sfp)
         return sfp, dfp
-    
+
     else:
         # lfp = np.array(lfp, dtype = np.float64)
         # dfp = np.array(dfp, dtype = np.float64)
@@ -756,7 +756,7 @@ def get_fp_dist(fp1, fp2, types, mx=False):
         return fpd, col_ind
     else:
         return fpd
-    
+
 
 
 def get_lfp(cell,
@@ -857,6 +857,8 @@ def get_dfp(cell,
     ldfp = True
     nx = natx
     ntyp = len(set(types))
+    lat = np.array(lat, dtype = np.float64)
+    rxyz = np.array(rxyz, dtype = np.float64)
     types = np.int32(types)
     znucl =  np.int32(znucl)
     ntyp =  np.int32(ntyp)
@@ -927,7 +929,7 @@ def _expand_cell(cell):
 #                     force_prime[k][m] += t_prime
 #     force = force_0 + force_prime
 #     force = force - np.sum(force, axis=0)/len(force)
-#     # return ((e+1.0)*np.log(e+1.0)-e), force*np.log(e+1.0) 
+#     # return ((e+1.0)*np.log(e+1.0)-e), force*np.log(e+1.0)
 #     return e, force
 
 
@@ -1040,7 +1042,7 @@ def _expand_cell(cell):
 #         fpe_left, fpf_left = get_ef(fp_left, dfp_left, ntyp, types)
 #         fpe_mid, fpf_mid = get_ef(fp_mid, dfp_mid, ntyp, types)
 #         fpe_right, fpf_right = get_ef(fp_right, dfp_right, ntyp, types)
-        
+
 #         rxyz_delta = np.ascontiguousarray(rxyz_delta)
 #         fpf_left = np.ascontiguousarray(fpf_left)
 #         fpf_mid = np.ascontiguousarray(fpf_mid)
@@ -1049,7 +1051,7 @@ def _expand_cell(cell):
 #             del_fpe += ( -np.dot(rxyz_delta[i_atom], fpf_left[i_atom]) - \
 #                         4.0*np.dot(rxyz_delta[i_atom], fpf_mid[i_atom]) - \
 #                         np.dot(rxyz_delta[i_atom], fpf_right[i_atom]) )/3.0
-        
+
 #     rxyz_final = rxyz + rxyz_disp
 #     ldfp = False
 #     fp_init, dfptmp1 = get_fp(lat, rxyz, types, znucl, \
@@ -1060,4 +1062,4 @@ def _expand_cell(cell):
 #     e_final = get_fpe(fp_final, ntyp, types)
 #     e_diff = e_final - e_init
 #     return del_fpe, e_diff
-    
+
