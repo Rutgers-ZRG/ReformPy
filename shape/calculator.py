@@ -90,6 +90,7 @@ class SHAPE_Calculator(Calculator):
                 ):
 
         self._atoms = None
+        self._types = None
         self.cell_file = 'POSCAR'
         self.results = {}
         self.default_parameters = {}
@@ -306,13 +307,21 @@ class SHAPE_Calculator(Calculator):
 
     @property
     def types(self):
-        """Direct access to the types array"""
-        return read_types(self.cell_file)
+        """Get the types array, using the atoms object if available."""
+        if self._atoms is not None:
+            self._types = read_types(self._atoms)
+        return self._types
 
     @types.setter
     def types(self, types):
-        """Direct access for setting the types array"""
-        self.set(types = types)
+        """Set the types array manually or based on the atoms object."""
+        if types is not None:
+            self._types = types
+        else:
+            if self._atoms is not None:
+                self._types = self.read_types(self._atoms)
+            else:
+                self._types = np.array([], dtype=int)
 
     @property
     def atoms(self):
@@ -320,13 +329,16 @@ class SHAPE_Calculator(Calculator):
 
     @atoms.setter
     def atoms(self, atoms):
+        """Set the atoms and update the types accordingly."""
         if atoms is None:
             self._atoms = None
+            self._types = None
             self.clear_results()
         else:
             if self.check_state(atoms):
                 self.clear_results()
             self._atoms = atoms.copy()
+            self._types = read_types(atoms) 
 
 
     def get_potential_energy(self, atoms = None, **kwargs):
@@ -335,13 +347,13 @@ class SHAPE_Calculator(Calculator):
         nx = self.nx
         lmax = self.lmax
         cutoff = self.cutoff
-        types = self.types
         znucl = self.znucl
 
         if self.check_restart(atoms) or self._energy is None:
             
             lat = atoms.cell[:]
             rxyz = atoms.get_positions()
+            types = read_types(atoms)
             
             lat = np.array(lat, dtype = np.float64)
             rxyz = np.array(rxyz, dtype = np.float64)
@@ -366,13 +378,13 @@ class SHAPE_Calculator(Calculator):
         nx = self.nx
         lmax = self.lmax
         cutoff = self.cutoff
-        types = self.types
         znucl = self.znucl
 
         if self.check_restart(atoms) or self._forces is None:
             
             lat = atoms.cell[:]
             rxyz = atoms.get_positions()
+            types = read_types(atoms)
             
             lat = np.array(lat, dtype = np.float64)
             rxyz = np.array(rxyz, dtype = np.float64)
@@ -398,13 +410,13 @@ class SHAPE_Calculator(Calculator):
         nx = self.nx
         lmax = self.lmax
         cutoff = self.cutoff
-        types = self.types
         znucl = self.znucl
 
         if self.check_restart(atoms) or self._stress is None:
             
             lat = atoms.cell[:]
             rxyz = atoms.get_positions()
+            types = read_types(atoms)
             
             lat = np.array(lat, dtype = np.float64)
             rxyz = np.array(rxyz, dtype = np.float64)
@@ -428,11 +440,11 @@ class SHAPE_Calculator(Calculator):
         nx = self.nx
         lmax = self.lmax
         cutoff = self.cutoff
-        types = self.types
         znucl = self.znucl
         
         lat = atoms.cell[:]
         rxyz = atoms.get_positions()
+        types = read_types(atoms)
         
         lat = np.array(lat, dtype = np.float64)
         rxyz = np.array(rxyz, dtype = np.float64)
@@ -684,18 +696,15 @@ def get_stress(lat, rxyz, forces):
     return stress_voigt
 
 
-def read_types(vp):
-    buff = []
-    with open(vp) as f:
-        for line in f:
-            buff.append(line.split())
-    try:
-        typt = np.array(buff[5], int)
-    except:
-        del(buff[5])
-        typt = np.array(buff[5], int)
+def read_types(atoms: Atoms):
+    """
+    Reads atomic types from an ASE Atoms object and returns an array of types.
+    """
+    atom_symbols = atoms.get_chemical_symbols()
+    unique_symbols, counts = np.unique(atom_symbols, return_counts=True)
+    
     types = []
-    for i in range(len(typt)):
-        types += [i+1]*typt[i]
-    types = np.array(types, int)
-    return types
+    for i in range(len(unique_symbols)):
+        types.extend([i + 1] * counts[i])  # Map atom type to integers starting from 1
+
+    return np.array(types, dtype=int)
