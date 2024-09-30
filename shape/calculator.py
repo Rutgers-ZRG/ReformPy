@@ -347,13 +347,15 @@ class SHAPE_Calculator(Calculator):
         nx = self.nx
         lmax = self.lmax
         cutoff = self.cutoff
+        types = self.types
         znucl = self.znucl
 
         if self.check_restart(atoms) or self._energy is None:
             
             lat = atoms.cell[:]
             rxyz = atoms.get_positions()
-            types = read_types(atoms)
+            if types is None:
+                types = read_types(atoms)
             
             lat = np.array(lat, dtype = np.float64)
             rxyz = np.array(rxyz, dtype = np.float64)
@@ -378,13 +380,15 @@ class SHAPE_Calculator(Calculator):
         nx = self.nx
         lmax = self.lmax
         cutoff = self.cutoff
+        types = self.types
         znucl = self.znucl
 
         if self.check_restart(atoms) or self._forces is None:
             
             lat = atoms.cell[:]
             rxyz = atoms.get_positions()
-            types = read_types(atoms)
+            if types is None:
+                types = read_types(atoms)
             
             lat = np.array(lat, dtype = np.float64)
             rxyz = np.array(rxyz, dtype = np.float64)
@@ -410,13 +414,15 @@ class SHAPE_Calculator(Calculator):
         nx = self.nx
         lmax = self.lmax
         cutoff = self.cutoff
+        types = self.types
         znucl = self.znucl
 
         if self.check_restart(atoms) or self._stress is None:
             
             lat = atoms.cell[:]
             rxyz = atoms.get_positions()
-            types = read_types(atoms)
+            if types is None:
+                types = read_types(atoms)
             
             lat = np.array(lat, dtype = np.float64)
             rxyz = np.array(rxyz, dtype = np.float64)
@@ -440,11 +446,13 @@ class SHAPE_Calculator(Calculator):
         nx = self.nx
         lmax = self.lmax
         cutoff = self.cutoff
+        types = self.types
         znucl = self.znucl
         
         lat = atoms.cell[:]
         rxyz = atoms.get_positions()
-        types = read_types(atoms)
+        if types is None:
+            types = read_types(atoms)
         
         lat = np.array(lat, dtype = np.float64)
         rxyz = np.array(rxyz, dtype = np.float64)
