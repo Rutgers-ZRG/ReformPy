@@ -1,6 +1,6 @@
-# SHAPE 
+# Reformpy
 
-**Symmetry-guided Hyperspace Accelerated Potential Energy exploration**
+**A Python package for Rational Exploration of Fingerprint-Oriented Relaxation Methodology**
 
 ### Implemented in Python3
 
@@ -10,7 +10,7 @@
 * Scipy >= 1.8.0
 * Numba >= 0.56.2
 * ASE >= 3.22.1
-* fplib >= 3.1
+* libfp >= 3.2.1
 
 ## Setup
 To install the C implementation of [Fingerprint Library](https://github.com/Rutgers-ZRG/fplib)  \
