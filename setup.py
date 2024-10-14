@@ -1,21 +1,22 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="shape",
-    version="1.1.0",
+    name="reformpy",
+    version="1.2.0",
     packages=find_packages(),
     install_requires=[
         # List your dependencies here
         # For example:
-        # 'numpy',
-        # 'scipy',
+        'numpy',
+        'scipy',
+        'libfp',
     ],
     author="Zhu Research Group",
     author_email="li.zhu@rutgers.edu",
     description="A brief description of the shape library",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/shape",
+    url="https://github.com/Rutgers-ZRG/ReformPy",
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

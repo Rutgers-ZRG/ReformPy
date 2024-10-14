@@ -4,7 +4,6 @@ from ase.atoms import Atoms
 from ase.calculators.calculator import Calculator
 from ase.calculators.calculator import CalculatorSetupError, all_changes
 
-# from numba import jit, njit, int32, float64
 try:
     from numba import jit, float64, int32
     use_numba = True
@@ -19,7 +18,7 @@ except ImportError:
 try:
     import libfp
 except:
-    from shape import libfppy as libfp
+    from reformpy import libfppy as libfp
     print("Warning: Failed to import libfp. Using Python version of libfppy (python implementation of libfp) instead, which may affect performance.")
 
 #################################### ASE Reference ####################################
@@ -28,8 +27,8 @@ except:
 #        https://wiki.fysik.dtu.dk/ase/development/calculators.html                   #
 #######################################################################################
 
-class SHAPE_Calculator(Calculator):
-    """ASE interface for SHAPE, with the Calculator interface.
+class Reform_Calculator(Calculator):
+    """ASE interface for Reform, with the Calculator interface.
 
         Implemented Properties:
 

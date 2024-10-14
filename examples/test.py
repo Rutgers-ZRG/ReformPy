@@ -10,7 +10,7 @@ print("Number of atoms:", len(atoms))
 
 ###################################################################################################
 
-from shape.calculator import SHAPE_Calculator
+from reformpy.calculator import Reform_Calculator
 from functools import reduce
 
 chem_nums = list(atoms.numbers)
@@ -18,7 +18,11 @@ znucl_list = reduce(lambda re, x: re+[x] if x not in re else re, chem_nums, [])
 ntyp = len(znucl_list)
 znucl = znucl_list
 
-calc = SHAPE_Calculator(
+print (atoms.get_atomic_numbers())
+print (znucl)
+print (atoms.get_chemical_symbols())
+
+calc = Reform_Calculator(
             cutoff = 5.0,
             contract = False,
             znucl = znucl,
