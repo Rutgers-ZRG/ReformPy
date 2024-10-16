@@ -50,18 +50,30 @@ print ("VASP_stress:\n", atoms.get_stress())
 
 ##################################################################################################
 
-from ase.calculators.espresso import Espresso
 import kp_finder
+import qepy
+
+try:
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD
+except Exception:
+    comm = None
+
+from qepy.calculator import QEpyCalculator
 
 kpoints = kp_finder.get_kpoints(kgrid=0.07)
 
 pseudopotentials = {'Si': 'Si.pbe-n-rrkjus_psl.1.0.0.UPF'}
-path_to_pseudopotentials="$HOME/apps/SSSP_1.3.0_PBE_efficiency"
-command = 'mpirun -np 16 $HOME/apps/qe-7.2/bin pw.x -in PREFIX.pwi > PREFIX.pwo'
+# path_to_pseudopotentials="$HOME/apps/SSSP_1.3.0_PBE_efficiency"
+# command = 'mpirun -np 16 $HOME/apps/qe-7.2/bin pw.x -in PREFIX.pwi > PREFIX.pwo'
+try:
+    os.environ["ESPRESSO_PSEUDO"]
+except KeyError:
+    os.system("export ESPRESSO_PSEUDO=$HOME/apps/SSSP_1.3.0_PBE_efficiency")
 
 input_data = {
     'control': {
-        'calculation': 'scf',
+        'calculation': 'vc-relax',
         'prefix': 'silicon',
         'outdir': './',
         'etot_conv_thr': 1.0e-5,
@@ -77,15 +89,21 @@ input_data = {
         'nosym': True },
     'electrons': {
         'electron_maxstep': 800,
-        'diagonalization': 'rmm-davidson',
+        # 'diagonalization': 'rmm-davidson', # Not implemented in QEpy
         'mixing_mode': 'local-TF',
         'mixing_beta': 0.5,
         'conv_thr': 1.0e-6 }
 }
 
-calc1 = Espresso(input_data = input_data,
-                 pseudopotentials = pseudopotentials,
-                 kpts = tuple(kpoints))
+ase_espresso = {
+    'input_data': input_data,
+    'pseudopotentials': pseudopotentials,
+    'kpts': tuple(kpoints)
+}
+
+calc1 = QEpyCalculator(comm = comm,
+                       ase_espresso = ase_espresso,
+                       logfile='QE.log')
 
 atoms.calc = calc1
 print ("QE_energy:\n", atoms.get_potential_energy())
@@ -273,8 +291,8 @@ print ("M3GNet_stress:\n", atoms.get_stress())
 
 ###################################################################################################
 
-from fplib3_api4ase import fp_GD_Calculator
-from fplib3_mixing import MixedCalculator
+from shape.calculator import SHAPE_Calculator
+from shape.mixing import MixedCalculator
 from functools import reduce
 
 chem_nums = list(atoms.numbers)
@@ -282,7 +300,7 @@ znucl_list = reduce(lambda re, x: re+[x] if x not in re else re, chem_nums, [])
 ntyp = len(znucl_list)
 znucl = znucl_list
 
-calc2 = fp_GD_Calculator(
+calc2 = SHAPE_Calculator(
             cutoff = 4.0,
             contract = False,
             znucl = znucl,
@@ -301,7 +319,7 @@ print ("fp_stress:\n", atoms.get_stress())
 
 
 
-calc = MixedCalculator(calc1, calc2)
+calc = MixedCalculator(calc1, calc2, iter_max=50)
 atoms.calc = calc
 print ("mixed_energy:\n", atoms.get_potential_energy())
 print ("mixed_forces:\n", atoms.get_forces())

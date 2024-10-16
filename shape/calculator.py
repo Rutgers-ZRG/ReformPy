@@ -1,10 +1,26 @@
 import numpy as np
-import fplib3
-import fplib
 import ase.io
 from ase.atoms import Atoms
 from ase.calculators.calculator import Calculator
 from ase.calculators.calculator import CalculatorSetupError, all_changes
+
+# from numba import jit, njit, int32, float64
+try:
+    from numba import jit, float64, int32
+    use_numba = True
+except ImportError:
+    use_numba = False
+    # Define dummy decorator and type aliases if Numba is not available
+    def jit(*args, **kwargs):
+        return lambda func: func
+    
+    float64 = int32 = lambda: None
+
+try:
+    import libfp
+except:
+    from shape import libfppy as libfp
+    print("Warning: Failed to import libfp. Using Python version of libfppy (python implementation of libfp) instead, which may affect performance.")
 
 #################################### ASE Reference ####################################
 #        https://gitlab.com/ase/ase/-/blob/master/ase/calculators/calculator.py       #
@@ -12,8 +28,8 @@ from ase.calculators.calculator import CalculatorSetupError, all_changes
 #        https://wiki.fysik.dtu.dk/ase/development/calculators.html                   #
 #######################################################################################
 
-class fp_GD_Calculator(Calculator):
-    """ASE interface for fp_GD, with the Calculator interface.
+class SHAPE_Calculator(Calculator):
+    """ASE interface for SHAPE, with the Calculator interface.
 
         Implemented Properties:
 
@@ -74,6 +90,7 @@ class fp_GD_Calculator(Calculator):
                 ):
 
         self._atoms = None
+        self._types = None
         self.cell_file = 'POSCAR'
         self.results = {}
         self.default_parameters = {}
@@ -290,13 +307,21 @@ class fp_GD_Calculator(Calculator):
 
     @property
     def types(self):
-        """Direct access to the types array"""
-        return fplib3.read_types(self.cell_file)
+        """Get the types array, using the atoms object if available."""
+        if self._atoms is not None:
+            self._types = read_types(self._atoms)
+        return self._types
 
     @types.setter
     def types(self, types):
-        """Direct access for setting the types array"""
-        self.set(types = types)
+        """Set the types array manually or based on the atoms object."""
+        if types is not None:
+            self._types = types
+        else:
+            if self._atoms is not None:
+                self._types = self.read_types(self._atoms)
+            else:
+                self._types = np.array([], dtype=int)
 
     @property
     def atoms(self):
@@ -304,13 +329,16 @@ class fp_GD_Calculator(Calculator):
 
     @atoms.setter
     def atoms(self, atoms):
+        """Set the atoms and update the types accordingly."""
         if atoms is None:
             self._atoms = None
+            self._types = None
             self.clear_results()
         else:
             if self.check_state(atoms):
                 self.clear_results()
             self._atoms = atoms.copy()
+            self._types = read_types(atoms) 
 
 
     def get_potential_energy(self, atoms = None, **kwargs):
@@ -323,8 +351,11 @@ class fp_GD_Calculator(Calculator):
         znucl = self.znucl
 
         if self.check_restart(atoms) or self._energy is None:
+            
             lat = atoms.cell[:]
             rxyz = atoms.get_positions()
+            if types is None:
+                types = read_types(atoms)
             
             lat = np.array(lat, dtype = np.float64)
             rxyz = np.array(rxyz, dtype = np.float64)
@@ -334,17 +365,11 @@ class fp_GD_Calculator(Calculator):
             nx = np.int32(nx)
             lmax = np.int32(lmax)
             cutoff = np.float64(cutoff)
-            # fp, _ = fplib3.get_fp(lat, rxyz, types, znucl,
-            #                       contract = contract,
-            #                       ldfp = False,
-            #                       ntyp = ntyp,
-            #                       nx = nx,
-            #                       lmax = lmax,
-            #                       cutoff = cutoff)
+
             cell = (lat, rxyz, types, znucl)
-            fp = fplib.get_lfp(cell, cutoff = cutoff, log = False, natx = nx)
+            fp = libfp.get_lfp(cell, cutoff = cutoff, log = False, natx = nx)
             fp = np.float64(fp)
-            fpe = fplib3.get_fpe(fp, ntyp = ntyp, types = types)
+            fpe = get_fpe(fp, ntyp = ntyp, types = types)
             self._energy = fpe
         return self._energy
 
@@ -359,8 +384,11 @@ class fp_GD_Calculator(Calculator):
         znucl = self.znucl
 
         if self.check_restart(atoms) or self._forces is None:
+            
             lat = atoms.cell[:]
             rxyz = atoms.get_positions()
+            if types is None:
+                types = read_types(atoms)
             
             lat = np.array(lat, dtype = np.float64)
             rxyz = np.array(rxyz, dtype = np.float64)
@@ -370,18 +398,12 @@ class fp_GD_Calculator(Calculator):
             nx = np.int32(nx)
             lmax = np.int32(lmax)
             cutoff = np.float64(cutoff)
-            # fp, dfp = fplib3.get_fp(lat, rxyz, types, znucl,
-            #                         contract = contract,
-            #                         ldfp = True,
-            #                         ntyp = ntyp,
-            #                         nx = nx,
-            #                         lmax = lmax,
-            #                         cutoff = cutoff)
+
             cell = (lat, rxyz, types, znucl)
-            fp, dfp  = fplib.get_dfp(cell, cutoff = cutoff, log = False, natx = nx)
+            fp, dfp  = libfp.get_dfp(cell, cutoff = cutoff, log = False, natx = nx)
             fp = np.float64(fp)
             dfp = np.array(dfp, dtype = np.float64)
-            fpe, fpf = fplib3.get_ef(fp, dfp, ntyp = ntyp, types = types)
+            fpe, fpf = get_ef(fp, dfp, ntyp = ntyp, types = types)
             self._forces = fpf
         return self._forces
 
@@ -396,9 +418,11 @@ class fp_GD_Calculator(Calculator):
         znucl = self.znucl
 
         if self.check_restart(atoms) or self._stress is None:
+            
             lat = atoms.cell[:]
             rxyz = atoms.get_positions()
-            pos = atoms.get_scaled_positions()
+            if types is None:
+                types = read_types(atoms)
             
             lat = np.array(lat, dtype = np.float64)
             rxyz = np.array(rxyz, dtype = np.float64)
@@ -408,14 +432,10 @@ class fp_GD_Calculator(Calculator):
             nx = np.int32(nx)
             lmax = np.int32(lmax)
             cutoff = np.float64(cutoff)
-            forces = np.float64(atoms.get_forces())
-            stress = fplib3.get_stress(lat, rxyz, forces)
-            # stress = fplib3.get_stress(lat, rxyz, types, znucl,
-            #                            contract = contract,
-            #                            ntyp = ntyp,
-            #                            nx = nx,
-            #                            lmax = lmax,
-            #                            cutoff = cutoff)
+            # forces = self._forces
+            forces=atoms.get_forces()
+            stress = get_stress(lat, rxyz, forces)
+
             self._stress = stress
         return self._stress
 
@@ -428,9 +448,12 @@ class fp_GD_Calculator(Calculator):
         cutoff = self.cutoff
         types = self.types
         znucl = self.znucl
-
+        
         lat = atoms.cell[:]
         rxyz = atoms.get_positions()
+        if types is None:
+            types = read_types(atoms)
+        
         lat = np.array(lat, dtype = np.float64)
         rxyz = np.array(rxyz, dtype = np.float64)
         types = np.int32(types)
@@ -438,20 +461,14 @@ class fp_GD_Calculator(Calculator):
         ntyp =  np.int32(ntyp)
         nx = np.int32(nx)
         lmax = np.int32(lmax)
-        cutoff = np.float64(cutoff)
-        # del_fpe, e_diff = fplib3.get_simpson_energy(lat, rxyz, types, znucl,
-        #                                             contract = contract,
-        #                                             ntyp = ntyp,
-        #                                             nx = nx,
-        #                                             lmax = lmax,
-        #                                             cutoff = cutoff)
-        
+        cutoff = np.float64(cutoff)   
         
         rxyz_delta = np.zeros_like(rxyz)
         rxyz_disp = np.zeros_like(rxyz)
         rxyz_left = np.zeros_like(rxyz)
         rxyz_mid = np.zeros_like(rxyz)
         rxyz_right = np.zeros_like(rxyz)
+        
         nat = len(rxyz)
         del_fpe = 0.0
         iter_max = 100
@@ -465,15 +482,15 @@ class fp_GD_Calculator(Calculator):
             rxyz_mid = rxyz.copy() + 2.0*(i_iter+1)*rxyz_delta
             rxyz_right = rxyz.copy() + 2.0*(i_iter+2)*rxyz_delta
             
-            fp_left, dfp_left = fplib.get_dfp((lat, rxyz_left, types, znucl),
+            fp_left, dfp_left = libfp.get_dfp((lat, rxyz_left, types, znucl),
                                               cutoff = cutoff, log = False, natx = nx)
-            fp_mid, dfp_mid = fplib.get_dfp((lat, rxyz_mid, types, znucl),
+            fp_mid, dfp_mid = libfp.get_dfp((lat, rxyz_mid, types, znucl),
                                               cutoff = cutoff, log = False, natx = nx)
-            fp_right, dfp_right = fplib.get_dfp((lat, rxyz_right, types, znucl),
+            fp_right, dfp_right = libfp.get_dfp((lat, rxyz_right, types, znucl),
                                               cutoff = cutoff, log = False, natx = nx)
-            fpe_left, fpf_left = fplib3.get_ef(fp_left, dfp_left, ntyp, types)
-            fpe_mid, fpf_mid = fplib3.get_ef(fp_mid, dfp_mid, ntyp, types)
-            fpe_right, fpf_right = fplib3.get_ef(fp_right, dfp_right, ntyp, types)
+            fpe_left, fpf_left = get_ef(fp_left, dfp_left, ntyp, types)
+            fpe_mid, fpf_mid = get_ef(fp_mid, dfp_mid, ntyp, types)
+            fpe_right, fpf_right = get_ef(fp_right, dfp_right, ntyp, types)
 
             for i_atom in range(nat):
                 del_fpe += ( -np.dot(rxyz_delta[i_atom], fpf_left[i_atom]) - \
@@ -481,12 +498,12 @@ class fp_GD_Calculator(Calculator):
                             np.dot(rxyz_delta[i_atom], fpf_right[i_atom]) )/3.0
         
         rxyz_final = rxyz + rxyz_disp
-        fp_init = fplib.get_lfp((lat, rxyz, types, znucl),
+        fp_init = libfp.get_lfp((lat, rxyz, types, znucl),
                                 cutoff = cutoff, log = False, natx = nx)
-        fp_final = fplib.get_lfp((lat, rxyz_final, types, znucl),
+        fp_final = libfp.get_lfp((lat, rxyz_final, types, znucl),
                                 cutoff = cutoff, log = False, natx = nx)
-        e_init = fplib3.get_fpe(fp_init, ntyp, types)
-        e_final = fplib3.get_fpe(fp_final, ntyp, types)
+        e_init = get_fpe(fp_init, ntyp, types)
+        e_final = get_fpe(fp_final, ntyp, types)
         e_diff = e_final - e_init
         
         print ( "Numerical integral = {0:.6e}".format(del_fpe) )
@@ -568,3 +585,134 @@ def check_atoms_type(atoms: Atoms) -> None:
         raise CalculatorSetupError(
             ('Expected an Atoms object, '
              'instead got object of type {}'.format(type(atoms))))
+
+
+
+
+@jit('Tuple((float64, float64[:,:]))(float64[:,:], float64[:,:,:,:], int32, \
+      int32[:])', nopython=True)
+def get_ef(fp, dfp, ntyp, types):
+    nat = len(fp)
+    e = 0.
+    fp = np.ascontiguousarray(fp)
+    dfp = np.ascontiguousarray(dfp)
+    for ityp in range(ntyp):
+        itype = ityp + 1
+        e0 = 0.
+        for i in range(nat):
+            for j in range(nat):
+                if types[i] == itype and types[j] == itype:
+                    vij = fp[i] - fp[j]
+                    t = np.vdot(vij, vij)
+                    e0 += t
+            e0 += 1.0/(np.linalg.norm(fp[i]) ** 2)
+        # print ("e0", e0)
+        e += e0
+    # print ("e", e)
+
+    force_0 = np.zeros((nat, 3), dtype = np.float64)
+    force_prime = np.zeros((nat, 3), dtype = np.float64)
+
+    for k in range(nat):
+        for ityp in range(ntyp):
+            itype = ityp + 1
+            for i in range(nat):
+                for j in range(nat):
+                    if  types[i] == itype and types[j] == itype:
+                        vij = fp[i] - fp[j]
+                        dvij = dfp[i][k] - dfp[j][k]
+                        for l in range(3):
+                            t = -2 * np.vdot(vij, dvij[l])
+                            force_0[k][l] += t
+                for m in range(3):
+                    t_prime = 2.0 * np.vdot(fp[i],dfp[i][k][m]) / (np.linalg.norm(fp[i]) ** 4)
+                    force_prime[k][m] += t_prime
+    force = force_0 + force_prime
+    force = force - np.sum(force, axis=0)/len(force)
+    # return ((e+1.0)*np.log(e+1.0)-e), force*np.log(e+1.0) 
+    return e, force
+
+
+@jit('(float64)(float64[:,:], int32, int32[:])', nopython=True)
+def get_fpe(fp, ntyp, types):
+    nat = len(fp)
+    e = 0.
+    fp = np.ascontiguousarray(fp)
+    for ityp in range(ntyp):
+        itype = ityp + 1
+        e0 = 0.
+        for i in range(nat):
+            for j in range(nat):
+                if types[i] == itype and types[j] == itype:
+                    vij = fp[i] - fp[j]
+                    t = np.vdot(vij, vij)
+                    e0 += t
+            e0 += 1.0/(np.linalg.norm(fp[i]) ** 2)
+        e += e0
+    # return ((e+1.0)*np.log(e+1.0)-e)
+    return e
+
+
+@jit('(float64[:])(float64[:,:], float64[:,:], float64[:,:])', nopython=True)
+def get_stress(lat, rxyz, forces):
+    """
+    Compute the stress tensor analytically using the virial theorem.
+
+    Parameters:
+    - lat: (3, 3) array of lattice vectors.
+    - rxyz: (nat, 3) array of atomic positions in Cartesian coordinates.
+    - forces: (nat, 3) array of forces on each atom.
+
+    Returns:
+    - stress_voigt: (6,) array representing the stress tensor in Voigt notation.
+    """
+    # Ensure inputs are NumPy arrays with correct data types
+    lat = np.asarray(lat, dtype=np.float64)
+    rxyz = np.asarray(rxyz, dtype=np.float64)
+    forces = np.asarray(forces, dtype=np.float64)
+
+    # Compute the cell volume
+    cell_vol = np.abs(np.linalg.det(lat))
+
+    # Initialize the stress tensor
+    stress_tensor = np.zeros((3, 3), dtype=np.float64)
+
+    # Compute the stress tensor using the virial theorem
+    nat = rxyz.shape[0]
+    for i in range(nat):
+        for m in range(3):
+            for n in range(3):
+                stress_tensor[m, n] -= forces[i, m] * rxyz[i, n]
+
+    # Divide by the cell volume
+    stress_tensor /= cell_vol
+
+    # Ensure the stress tensor is symmetric (if applicable)
+    # stress_tensor = 0.5 * (stress_tensor + stress_tensor.T)
+
+    # Convert the stress tensor to Voigt notation
+    # The Voigt notation order is: [xx, yy, zz, yz, xz, xy]
+    stress_voigt = np.array([
+        stress_tensor[0, 0],  # xx
+        stress_tensor[1, 1],  # yy
+        stress_tensor[2, 2],  # zz
+        stress_tensor[1, 2],  # yz
+        stress_tensor[0, 2],  # xz
+        stress_tensor[0, 1],  # xy
+    ], dtype=np.float64)
+
+    return stress_voigt
+
+
+def read_types(atoms: Atoms):
+    """
+    Reads atomic types from an ASE Atoms object and returns an array of types.
+    """
+    atom_symbols = atoms.get_chemical_symbols()
+    unique_symbols, counts = np.unique(atom_symbols, return_counts=True)
+    
+    types = []
+    for i in range(len(unique_symbols)):
+        types.extend([i + 1] * counts[i])  # Map atom type to integers starting from 1
+
+    return np.array(types, dtype=int)

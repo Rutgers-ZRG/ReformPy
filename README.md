@@ -10,6 +10,7 @@
 * Scipy >= 1.8.0
 * Numba >= 0.56.2
 * ASE >= 3.22.1
+* fplib >= 3.1
 
 ## Setup
 To install the C implementation of [Fingerprint Library](https://github.com/Rutgers-ZRG/fplib)  \
@@ -184,18 +185,4 @@ If you use Fingerprint distance as a metric to measure crystal similarity please
   url = {https://doi.org/10.1063/1.4940026}
 }
 ```
-If you use GOM Fingerprint as a descriptor for developing MLP and other machine-learning related research please also cite the following paper:
-```
-@article{sadeghiMetricsMeasuringDistances2013,
-  title = {Metrics for Measuring Distances in Configuration Spaces},
-  author = {Sadeghi, Ali and Ghasemi, S. Alireza and Schaefer, Bastian and Mohr, Stephan and Lill, Markus A. and Goedecker, Stefan},
-  year = {2013},
-  month = nov,
-  journal = {The Journal of Chemical Physics},
-  volume = {139},
-  number = {18},
-  pages = {184118},
-  doi = {10.1063/1.4828704},
-  url = {https://pubs.aip.org/aip/jcp/article/317391}
-}
-```
+
