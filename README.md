@@ -6,28 +6,28 @@
 
 ## Dependencies
 * Python >= 3.8.5
-* Numpy >= 1.21.4
-* Scipy >= 1.8.0
-* Numba >= 0.56.2
+* Numpy >= 1.24.4
+* Scipy >= 1.10.1
+* Numba >= 0.58.1
 * ASE >= 3.22.1
-* fplib >= 3.1
+* libfp >= 3.1.2
 
 ## Setup
-To install the C implementation of [Fingerprint Library](https://github.com/Rutgers-ZRG/fplib)  \
+To install the C implementation of [Fingerprint Library](https://github.com/Rutgers-ZRG/libfp)  \
 First, you need create a [conda](https://conda.io/projects/conda/en/latest/user-guide/install/index.html) environment:
   ```bash
-  conda create -n fplibenv python=3.8 pip ; conda activate fplibenv
+  conda create -n shape python=3.8 pip ; conda activate shape
   python3 -m pip install -U pip setuptools wheel
   ```
 Then use conda to install LAPACK:
   ```bash
   conda install conda-forge::lapack
   ```
-Next, you need to download the `fplib` using `git`:
+Next, you need to download the `libfp` using `git`:
   ```bash
-  git clone https://github.com/Rutgers-ZRG/fplib.git
+  git clone https://github.com/Rutgers-ZRG/libfp.git
   ```
-and modify the `setup.py` in `fplib/fppy`:
+and modify the `setup.py` in `libfp/fppy`:
   ```python
   lapack_dir=["$CONDA_PREFIX/lib"]
   lapack_lib=['openblas']
@@ -43,7 +43,7 @@ and modify the `setup.py` in `fplib/fppy`:
   ```
   Then:
   ```bash
-  cd fplib/fppy/ ; python3 -m pip install -e .
+  cd libfp/fppy/ ; python3 -m pip install -e .
   ```
 
 
@@ -93,7 +93,7 @@ and [ASE calculator proposal](https://wiki.fysik.dtu.dk/ase/development/proposal
 ```
 
 
-### Calling fplib3 calculator from ASE API
+### Calling SHAPE calculator from ASE API
 ```python
 import numpy as np
 import ase.io
@@ -102,9 +102,8 @@ from ase.optimize.sciopt import SciPyFminBFGS, SciPyFminCG
 from ase.constraints import StrainFilter, UnitCellFilter
 from ase.io.trajectory import Trajectory
 
-from fplib3_api4ase import fp_GD_Calculator
-# from fplib3_mixing import MixedCalculator
-# from ase.calculators.mixing import MixedCalculator
+from shape.calculator import SHAPE_Calculator
+# from shape.mixing import MixedCalculator
 # from ase.calculators.vasp import Vasp
 
 atoms = ase.io.read('.'+'/'+'POSCAR')
@@ -116,7 +115,7 @@ from functools import reduce
 chem_nums = list(atoms.numbers)
 znucl_list = reduce(lambda re, x: re+[x] if x not in re else re, chem_nums, [])
 ntyp = len(znucl_list)
-znucl = np.array(znucl_list, int)
+znucl = znucl_list
 
 calc = fp_GD_Calculator(
             cutoff = 6.0,
@@ -138,21 +137,40 @@ print ("fp_stress:\n", atoms.get_stress())
 
 # af = atoms
 # af = StrainFilter(atoms)
-af = UnitCellFilter(atoms, scalar_pressure = 0.0)
+traj = Trajectory(trajfile, 'w', atoms=atoms, properties=['energy', 'forces', 'stress'])
 
 ############################## Relaxation method ##############################
 
-# opt = BFGS(af, maxstep = 1.e-1, trajectory = trajfile)
-opt = FIRE(af, maxstep = 1.e-1, trajectory = trajfile)
-# opt = LBFGS(af, maxstep = 1.e-1, trajectory = trajfile, memory = 10, use_line_search = True)
-# opt = LBFGS(af, maxstep = 1.e-1, trajectory = trajfile, memory = 10, use_line_search = False)
-# opt = SciPyFminCG(af, maxstep = 1.e-1, trajectory = trajfile)
-# opt = SciPyFminBFGS(af, maxstep = 1.e-1, trajectory = trajfile)
+# opt = BFGS(af, maxstep = 1.e-1)
+opt = FIRE(af, maxstep = 1.e-1)
+# opt = LBFGS(af, maxstep = 1.e-1, memory = 10, use_line_search = True)
+# opt = LBFGS(af, maxstep = 1.e-1, memory = 10, use_line_search = False)
+# opt = SciPyFminCG(af, maxstep = 1.e-1)
+# opt = SciPyFminBFGS(af, maxstep = 1.e-1)
 
-opt.run(fmax = 1.e-5)
+opt.attach(traj.write, interval=1)
+opt.run(fmax = 1.e-3, steps = 500)
+traj.close()
 
-traj = Trajectory(trajfile)
-ase.io.write('opt.vasp', traj[-1], direct = True, long_format=True, vasp5 = True)
+traj = Trajectory(trajfile, 'r')
+atoms_final = traj[-1]
+ase.io.write('fp_opt.vasp', atoms_final, direct = True, long_format = True, vasp5 = True)
+
+final_cell = atoms_final.get_cell()
+final_cell_par = atoms_final.cell.cellpar()
+final_structure = atoms_final.get_scaled_positions()
+final_energy_per_atom = float( atoms_final.get_potential_energy() / len(atoms_final) )
+final_stress = atoms_final.get_stress()
+
+print("Relaxed lattice vectors are \n{0:s}".\
+      format(np.array_str(final_cell, precision=6, suppress_small=False)))
+print("Relaxed cell parameters are \n{0:s}".\
+     format(np.array_str(final_cell_par, precision=6, suppress_small=False)))
+print("Relaxed structure in fractional coordinates is \n{0:s}".\
+      format(np.array_str(final_structure, precision=6, suppress_small=False)))
+print("Final energy per atom is \n{0:.6f}".format(final_energy_per_atom))
+print("Final stress is \n{0:s}".\
+      format(np.array_str(final_stress, precision=6, suppress_small=False)))
 ```
 ## Citation
 If you use this Fingerprint Library (or modified version) for your research please kindly cite our paper:
