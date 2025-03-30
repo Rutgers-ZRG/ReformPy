@@ -4,6 +4,8 @@ from ase.atoms import Atoms
 from ase.calculators.calculator import Calculator
 from ase.calculators.calculator import CalculatorSetupError, all_changes
 
+from mpi4py import MPI
+
 try:
     from numba import jit, float64, int32
     use_numba = True
@@ -85,8 +87,42 @@ class Reform_Calculator(Calculator):
 
     def __init__(self,
                  atoms = None,
+                 comm = None, # MPI communicator
+                 parallel = False, # Switch to enable/disable MPI for this calculator
                  **kwargs
                 ):
+        
+        """Initialize the Calculator with optional MPI awareness.
+
+        Parameters
+        ----------
+        comm : MPI communicator or None
+            If None, defaults to MPI.COMM_WORLD (or a 'fake' serial communicator).
+        parallel : bool
+            If True, the code runs only on rank 0 and then broadcasts results.
+            If False, it computes in pure serial on each rank (original behavior).
+        """
+        super().__init__(atoms=atoms, **kwargs)
+
+        # If no communicator is given, we can default to COMM_WORLD
+        # or a "serial" communicator if you prefer:
+        if comm is None:
+            comm = MPI.COMM_WORLD
+        
+        self.comm = comm
+        self.rank = comm.Get_rank()
+        self.parallel = parallel
+
+        # Local caching:
+        self._energy = None
+        self._forces = None
+        self._stress = None
+
+        # etc. set up your default parameters
+        # e.g. self.default_parameters = { ... }
+
+        if atoms is not None:
+            self.atoms = atoms.copy()
 
         self._atoms = None
         self._types = None
@@ -341,73 +377,68 @@ class Reform_Calculator(Calculator):
 
 
     def get_potential_energy(self, atoms = None, **kwargs):
-        contract = self.contract
-        ntyp = self.ntyp
-        nx = self.nx
-        lmax = self.lmax
-        cutoff = self.cutoff
-        types = self.types
-        znucl = self.znucl
-
+        """MPI-aware energy computation."""
+        if atoms is None:
+            atoms = self.atoms
         if self.check_restart(atoms) or self._energy is None:
-            
-            lat = atoms.cell[:]
-            rxyz = atoms.get_positions()
-            if types is None:
-                types = read_types(atoms)
-            
-            lat = np.array(lat, dtype = np.float64)
-            rxyz = np.array(rxyz, dtype = np.float64)
-            types = np.int32(types)
-            znucl =  np.int32(znucl)
-            ntyp =  np.int32(ntyp)
-            nx = np.int32(nx)
-            lmax = np.int32(lmax)
-            cutoff = np.float64(cutoff)
 
-            cell = (lat, rxyz, types, znucl)
-            fp = libfp.get_lfp(cell, cutoff = cutoff, log = False, natx = nx)
-            fp = np.float64(fp)
-            fpe = get_fpe(fp, ntyp = ntyp, types = types)
-            self._energy = fpe
+            if self.parallel:
+                # Only rank 0 does the real calculation
+                if self.rank == 0:
+                    energy = self._compute_energy(atoms)
+                else:
+                    energy = None
+
+                # Broadcast from rank 0 to all other ranks
+                energy = self.comm.bcast(energy, root=0)
+                self._energy = energy
+
+            else:
+                # Serial fallback (the original behavior)
+                self._energy = self._compute_energy(atoms)
+
         return self._energy
 
-
     def get_forces(self, atoms = None, **kwargs):
-        contract = self.contract
-        ntyp = self.ntyp
-        nx = self.nx
-        lmax = self.lmax
-        cutoff = self.cutoff
-        types = self.types
-        znucl = self.znucl
+        """MPI-aware forces computation."""
+        if atoms is None:
+            atoms = self.atoms
 
         if self.check_restart(atoms) or self._forces is None:
-            
-            lat = atoms.cell[:]
-            rxyz = atoms.get_positions()
-            if types is None:
-                types = read_types(atoms)
-            
-            lat = np.array(lat, dtype = np.float64)
-            rxyz = np.array(rxyz, dtype = np.float64)
-            types = np.int32(types)
-            znucl =  np.int32(znucl)
-            ntyp =  np.int32(ntyp)
-            nx = np.int32(nx)
-            lmax = np.int32(lmax)
-            cutoff = np.float64(cutoff)
 
-            cell = (lat, rxyz, types, znucl)
-            fp, dfp  = libfp.get_dfp(cell, cutoff = cutoff, log = False, natx = nx)
-            fp = np.float64(fp)
-            dfp = np.array(dfp, dtype = np.float64)
-            fpe, fpf = get_ef(fp, dfp, ntyp = ntyp, types = types)
-            self._forces = fpf
+            if self.parallel:
+                if self.rank == 0:
+                    forces = self._compute_forces(atoms)
+                else:
+                    forces = None
+                forces = self.comm.bcast(forces, root=0)
+                self._forces = forces
+            else:
+                self._forces = self._compute_forces(atoms)
+
         return self._forces
 
-
     def get_stress(self, atoms = None, **kwargs):
+        """MPI-aware stress computation."""
+        if atoms is None:
+            atoms = self.atoms
+
+        if self.check_restart(atoms) or self._stress is None:
+
+            if self.parallel:
+                if self.rank == 0:
+                    stress = self._compute_stress(atoms)
+                else:
+                    stress = None
+                stress = self.comm.bcast(stress, root=0)
+                self._stress = stress
+            else:
+                self._stress = self._compute_stress(atoms)
+
+        return self._stress
+
+    def _compute_energy(self, atoms):
+        """Actual energy computation using fingerprint method."""
         contract = self.contract
         ntyp = self.ntyp
         nx = self.nx
@@ -415,29 +446,70 @@ class Reform_Calculator(Calculator):
         cutoff = self.cutoff
         types = self.types
         znucl = self.znucl
+        
+        lat = atoms.cell[:]
+        rxyz = atoms.get_positions()
+        if types is None:
+            types = read_types(atoms)
+        
+        lat = np.array(lat, dtype=np.float64)
+        rxyz = np.array(rxyz, dtype=np.float64)
+        types = np.int32(types)
+        znucl = np.int32(znucl)
+        ntyp = np.int32(ntyp)
+        nx = np.int32(nx)
+        lmax = np.int32(lmax)
+        cutoff = np.float64(cutoff)
 
-        if self.check_restart(atoms) or self._stress is None:
-            
-            lat = atoms.cell[:]
-            rxyz = atoms.get_positions()
-            if types is None:
-                types = read_types(atoms)
-            
-            lat = np.array(lat, dtype = np.float64)
-            rxyz = np.array(rxyz, dtype = np.float64)
-            types = np.int32(types)
-            znucl =  np.int32(znucl)
-            ntyp =  np.int32(ntyp)
-            nx = np.int32(nx)
-            lmax = np.int32(lmax)
-            cutoff = np.float64(cutoff)
-            # forces = self._forces
-            forces=atoms.get_forces()
-            stress = get_stress(lat, rxyz, forces)
+        cell = (lat, rxyz, types, znucl)
+        fp = libfp.get_lfp(cell, cutoff=cutoff, log=False, natx=nx)
+        fp = np.float64(fp)
+        fpe = get_fpe(fp, ntyp=ntyp, types=types)
+        return fpe
 
-            self._stress = stress
-        return self._stress
+    def _compute_forces(self, atoms):
+        """Actual forces computation using fingerprint method."""
+        contract = self.contract
+        ntyp = self.ntyp
+        nx = self.nx
+        lmax = self.lmax
+        cutoff = self.cutoff
+        types = self.types
+        znucl = self.znucl
+        
+        lat = atoms.cell[:]
+        rxyz = atoms.get_positions()
+        if types is None:
+            types = read_types(atoms)
+        
+        lat = np.array(lat, dtype=np.float64)
+        rxyz = np.array(rxyz, dtype=np.float64)
+        types = np.int32(types)
+        znucl = np.int32(znucl)
+        ntyp = np.int32(ntyp)
+        nx = np.int32(nx)
+        lmax = np.int32(lmax)
+        cutoff = np.float64(cutoff)
 
+        cell = (lat, rxyz, types, znucl)
+        fp, dfp = libfp.get_dfp(cell, cutoff=cutoff, log=False, natx=nx)
+        fp = np.float64(fp)
+        dfp = np.array(dfp, dtype=np.float64)
+        fpe, fpf = get_ef(fp, dfp, ntyp=ntyp, types=types)
+        return fpf
+
+    def _compute_stress(self, atoms):
+        """Actual stress computation using virial theorem."""
+        lat = atoms.cell[:]
+        rxyz = atoms.get_positions()
+        forces = atoms.get_forces()
+        
+        lat = np.array(lat, dtype=np.float64)
+        rxyz = np.array(rxyz, dtype=np.float64)
+        forces = np.array(forces, dtype=np.float64)
+        
+        stress = get_stress(lat, rxyz, forces)
+        return stress
 
     def test_energy_consistency(self, atoms = None, **kwargs):
         contract = self.contract
