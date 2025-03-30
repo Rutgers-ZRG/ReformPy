@@ -102,8 +102,18 @@ class Reform_Calculator(Calculator):
             If True, the code runs only on rank 0 and then broadcasts results.
             If False, it computes in pure serial on each rank (original behavior).
         """
-        super().__init__(atoms=atoms, **kwargs)
-
+        # Initialize results dictionary first
+        self.results = {}
+        
+        # Initialize other attributes
+        self._energy = None
+        self._forces = None
+        self._stress = None
+        self._atoms = None
+        self._types = None
+        self.cell_file = 'POSCAR'
+        self.default_parameters = {}
+        
         # If no communicator is given, we can default to COMM_WORLD
         # or a "serial" communicator if you prefer:
         if comm is None:
@@ -113,35 +123,19 @@ class Reform_Calculator(Calculator):
         self.rank = comm.Get_rank()
         self.parallel = parallel
 
-        # Local caching:
-        self._energy = None
-        self._forces = None
-        self._stress = None
-
-        # etc. set up your default parameters
-        # e.g. self.default_parameters = { ... }
-
-        if atoms is not None:
-            self.atoms = atoms.copy()
-
-        self._atoms = None
-        self._types = None
-        self.cell_file = 'POSCAR'
-        self.results = {}
-        self.default_parameters = {}
-        self.restart()
-        if atoms is None :
-            atoms = ase.io.read(self.cell_file)
-        self.atoms = atoms
-        self.atoms_save = None
-
         # Initialize parameter dictionaries
         self._store_param_state()  # Initialize an empty parameter state
 
+        # Call parent class initialization
         Calculator.__init__(self,
-                            atoms = atoms,
-                            **kwargs
-                           )
+                          atoms=atoms,
+                          **kwargs)
+
+        # Set up atoms after parent initialization
+        if atoms is None:
+            atoms = ase.io.read(self.cell_file)
+        self.atoms = atoms
+        self.atoms_save = None
 
     def set(self, **kwargs):
         """Override the set function, to test for changes in the
