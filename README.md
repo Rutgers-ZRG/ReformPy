@@ -11,6 +11,8 @@
 * Numba >= 0.58.1
 * ASE >= 3.22.1
 * libfp >= 3.1.2
+* mpi4py >= 3.1.6
+* qepy >= 6.5.0 (optional)
 
 ## Setup
 To install the C implementation of [Fingerprint Library](https://github.com/Rutgers-ZRG/libfp)  \
@@ -27,29 +29,35 @@ Next, you need to download the `libfp` using `git`:
   ```bash
   git clone https://github.com/Rutgers-ZRG/libfp.git
   ```
-and modify the `setup.py` in `libfp/fppy`:
-  ```python
-  lapack_dir=["$CONDA_PREFIX/lib"]
-  lapack_lib=['openblas']
-  extra_link_args = ["-Wl,-rpath,$CONDA_PREFIX/lib"]
-  .
-  .
-  .
-  include_dirs = [source_dir, "$CONDA_PREFIX/include"]
-  ```
-  Also set the corresponding `DYLD_LIBRARY_PATH` in your `.bashrc` file as:
+Also set the corresponding `DYLD_LIBRARY_PATH` in your `.bashrc` file as:
   ```bash
   export DYLD_LIBRARY_PATH="$CONDA_PREFIX/lib:$DYLD_LIBRARY_PATH"
   ```
   Then:
   ```bash
-  cd libfp/fppy/ ; python3 -m pip install -e .
+  cd libfp ; python3 -m pip install -e .
   ```
 
-
-Then install the remaining Python packages through pip
+Then install the remaining Python dependencies through pip
   ```bash
   python3 -m pip install numpy>=1.21.4 scipy>=1.8.0 numba>=0.56.2 ase==3.22.1
+  ```
+Finally, we can install ReformPy
+  ```bash
+  git clone https://github.com/Rutgers-ZRG/ReformPy.git
+  cd ReformPy ; python3 -m pip install -e .
+  ```
+After installation, you can test the integrity of `libfp` and `reformpy` in Python3
+  ```python
+  import libfp
+  from reformpy.calculator import Reform_Calculator
+  ```
+If you saw MPI related error, you can try to reinstall `mpi4py` with `MPICH` or `openmpi`.
+Following is an example to fix this issue using `MPICH` on CentOS cluster:
+  ```bash
+  module load intel/17.0.4
+  python3 -m pip uninstall mpi4py
+  python3 -m pip install --no-cache-dir "mpi4py<4.0"
   ```
 
 ## Usage
@@ -102,7 +110,7 @@ from ase.optimize.sciopt import SciPyFminBFGS, SciPyFminCG
 from ase.constraints import StrainFilter, UnitCellFilter
 from ase.io.trajectory import Trajectory
 
-from reformpy.calculator import Reformpy_Calculator
+from reformpy.calculator import Reform_Calculator
 # from reformpy.mixing import MixedCalculator
 # from ase.calculators.vasp import Vasp
 
