@@ -21,7 +21,7 @@ First, you need create a [conda](https://conda.io/projects/conda/en/latest/user-
   conda create -n reformpy python=3.8 pip ; conda activate reformpy
   python3 -m pip install -U pip setuptools wheel
   ```
-Then use conda to install LAPACK:
+Then use conda to install LAPACK (or you can load intel module to use `MKL`):
   ```bash
   conda install conda-forge::lapack
   ```
