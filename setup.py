@@ -10,7 +10,7 @@ setup(
         'numba>=0.58.1',
         'ase>=3.22.1',
         'libfp>=3.1.2',
-        'mpi4py>=3.1.6,<4.0',
+        'mpi4py>=3.1.0,<4.0',
     ],
     author="Zhu Research Group",
     author_email="li.zhu@rutgers.edu",
