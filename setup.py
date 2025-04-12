@@ -1,25 +1,27 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="shape",
-    version="1.1.0",
+    name="reformpy",
+    version="1.2.0",
     packages=find_packages(),
     install_requires=[
-        # List your dependencies here
-        # For example:
-        # 'numpy',
-        # 'scipy',
+        'numpy>=1.24.4',
+        'scipy>=1.10.1',
+        'numba>=0.58.1',
+        'ase>=3.22.1',
+        'libfp>=3.1.2',
+        'mpi4py>=3.1.6,<4.0',
     ],
     author="Zhu Research Group",
     author_email="li.zhu@rutgers.edu",
-    description="A brief description of the shape library",
+    description="Rational Exploration of Fingerprint-Oriented Relaxation Methodology",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/shape",
+    url="https://github.com/Rutgers-ZRG/ReformPy",
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires='>=3.6',
+    python_requires='>=3.8',
 )

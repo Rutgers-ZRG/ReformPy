@@ -1,6 +1,6 @@
-# SHAPE 
+# Reformpy
 
-**Symmetry-guided Hyperspace Accelerated Potential Energy exploration**
+**A Python package for Rational Exploration of Fingerprint-Oriented Relaxation Methodology**
 
 ### Implemented in Python3
 
@@ -11,15 +11,19 @@
 * Numba >= 0.58.1
 * ASE >= 3.22.1
 * libfp >= 3.1.2
+* mpi4py >= 3.1.6
+* qepy >= 6.5.0 (optional)
+
 
 ## Setup
 To install the C implementation of [Fingerprint Library](https://github.com/Rutgers-ZRG/libfp)  \
 First, you need create a [conda](https://conda.io/projects/conda/en/latest/user-guide/install/index.html) environment:
   ```bash
-  conda create -n shape python=3.8 pip ; conda activate shape
+  conda create -n reformpy python=3.8 pip ; conda activate reformpy
+
   python3 -m pip install -U pip setuptools wheel
   ```
-Then use conda to install LAPACK:
+Then use conda to install LAPACK (or you can load intel module to use `MKL`):
   ```bash
   conda install conda-forge::lapack
   ```
@@ -27,29 +31,81 @@ Next, you need to download the `libfp` using `git`:
   ```bash
   git clone https://github.com/Rutgers-ZRG/libfp.git
   ```
-and modify the `setup.py` in `libfp/fppy`:
-  ```python
-  lapack_dir=["$CONDA_PREFIX/lib"]
-  lapack_lib=['openblas']
-  extra_link_args = ["-Wl,-rpath,$CONDA_PREFIX/lib"]
-  .
-  .
-  .
-  include_dirs = [source_dir, "$CONDA_PREFIX/include"]
-  ```
-  Also set the corresponding `DYLD_LIBRARY_PATH` in your `.bashrc` file as:
+
+Also set the corresponding `DYLD_LIBRARY_PATH` in your `.bashrc` file as:
+
   ```bash
   export DYLD_LIBRARY_PATH="$CONDA_PREFIX/lib:$DYLD_LIBRARY_PATH"
   ```
   Then:
   ```bash
-  cd libfp/fppy/ ; python3 -m pip install -e .
+
+  cd libfp ; python3 -m pip install --no-cache-dir -e .
+
   ```
 
-
-Then install the remaining Python packages through pip
+Then install the remaining Python dependencies through pip
   ```bash
   python3 -m pip install numpy>=1.21.4 scipy>=1.8.0 numba>=0.56.2 ase==3.22.1
+  ```
+Finally, we can install ReformPy
+  ```bash
+  git clone https://github.com/Rutgers-ZRG/ReformPy.git
+  cd ReformPy ; python3 -m pip install --no-cache-dir -e .
+  ```
+After installation, you can test the integrity of `libfp` and `reformpy` in Python3
+  ```python
+  import libfp
+  from reformpy.calculator import Reform_Calculator
+  ```
+If you saw MPI related error, you can try to reinstall `mpi4py` with `MPICH` or `openmpi`. \
+Following is an example to fix this issue using `MPICH` on CentOS cluster:
+  ```bash
+  module load intel/17.0.4
+  python3 -m pip uninstall mpi4py
+  python3 -m pip install --no-cache-dir "mpi4py<4.0"
+  ```
+If you encounter errors when installing `qepy` from source, you probably need to modify the `setup.py` file.
+  ```bash
+  python3 -m pip uninstall -y qepy
+  git clone --recurse-submodules https://gitlab.com/shaoxc/qepy.git
+  cd qepy ; rm -rf build/ dist/ *.egg-info
+  ```
+Following is an example with intel `MKL` library:
+  ```python
+  # Add following lines within build_extension function
+  # Set up Intel MKL environment if not already set
+  if 'MKLROOT' not in env:
+      env['MKLROOT'] = '/opt/sw/packages/intel/17.0.4/compilers_and_libraries/linux/mkl'
+      
+  # Make sure qedir is set correctly
+  if 'qedir' not in env or not env['qedir']:
+      env['qedir'] = os.path.join(os.environ.get("HOME"), "apps/qepy-qe-7.2")
+  
+  qedir_path = env['qedir']  # Store in local variable for later use
+  print(f"Using existing QE installation at: {qedir_path}", flush=True)
+  
+  # Set compilers to Intel
+  env['CC'] = 'icc'
+  env['FC'] = 'ifort'
+  env['F77'] = 'ifort'
+  env['F90'] = 'ifort'
+  env['MPIF90'] = env.get('I_MPI_ROOT', '/opt/sw/packages/intel/17.0.4/compilers_and_libraries/linux/mpi') + '/intel64/bin/mpiifort'
+  env['MPICC'] = env.get('I_MPI_ROOT', '/opt/sw/packages/intel/17.0.4/compilers_and_libraries/linux/mpi') + '/intel64/bin/mpiicc'
+
+  # Set environment variables for compilation
+  env['CFLAGS'] = '-fPIC ' + env.get('CFLAGS', '')
+  env['FFLAGS'] = '-fPIC ' + env.get('FFLAGS', '')
+  
+  # Set MKL libraries
+  env['BLAS_LIBS'] = f"-L{env['MKLROOT']}/lib/intel64 -lmkl_intel_lp64 -lmkl_sequential -lmkl_core"
+  env['LAPACK_LIBS'] = ''  # LAPACK is included in MKL
+  
+  # Add to LD_LIBRARY_PATH
+  if 'LD_LIBRARY_PATH' in env:
+      env['LD_LIBRARY_PATH'] = f"{env['MKLROOT']}/lib/intel64:{env['LD_LIBRARY_PATH']}"
+  else:
+      env['LD_LIBRARY_PATH'] = f"{env['MKLROOT']}/lib/intel64"
   ```
 
 ## Usage
@@ -93,7 +149,9 @@ and [ASE calculator proposal](https://wiki.fysik.dtu.dk/ase/development/proposal
 ```
 
 
-### Calling SHAPE calculator from ASE API
+
+### Calling Reformpy calculator from ASE API
+
 ```python
 import numpy as np
 import ase.io
@@ -102,8 +160,8 @@ from ase.optimize.sciopt import SciPyFminBFGS, SciPyFminCG
 from ase.constraints import StrainFilter, UnitCellFilter
 from ase.io.trajectory import Trajectory
 
-from shape.calculator import SHAPE_Calculator
-# from shape.mixing import MixedCalculator
+from reformpy.calculator import Reform_Calculator
+# from reformpy.mixing import MixedCalculator
 # from ase.calculators.vasp import Vasp
 
 atoms = ase.io.read('.'+'/'+'POSCAR')
