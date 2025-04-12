@@ -14,11 +14,13 @@
 * mpi4py >= 3.1.6
 * qepy >= 6.5.0 (optional)
 
+
 ## Setup
 To install the C implementation of [Fingerprint Library](https://github.com/Rutgers-ZRG/libfp)  \
 First, you need create a [conda](https://conda.io/projects/conda/en/latest/user-guide/install/index.html) environment:
   ```bash
   conda create -n reformpy python=3.8 pip ; conda activate reformpy
+
   python3 -m pip install -U pip setuptools wheel
   ```
 Then use conda to install LAPACK (or you can load intel module to use `MKL`):
@@ -29,13 +31,17 @@ Next, you need to download the `libfp` using `git`:
   ```bash
   git clone https://github.com/Rutgers-ZRG/libfp.git
   ```
+
 Also set the corresponding `DYLD_LIBRARY_PATH` in your `.bashrc` file as:
+
   ```bash
   export DYLD_LIBRARY_PATH="$CONDA_PREFIX/lib:$DYLD_LIBRARY_PATH"
   ```
   Then:
   ```bash
+
   cd libfp ; python3 -m pip install --no-cache-dir -e .
+
   ```
 
 Then install the remaining Python dependencies through pip
@@ -143,7 +149,9 @@ and [ASE calculator proposal](https://wiki.fysik.dtu.dk/ase/development/proposal
 ```
 
 
+
 ### Calling Reformpy calculator from ASE API
+
 ```python
 import numpy as np
 import ase.io

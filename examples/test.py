@@ -18,6 +18,7 @@ znucl_list = reduce(lambda re, x: re+[x] if x not in re else re, chem_nums, [])
 ntyp = len(znucl_list)
 znucl = znucl_list
 
+
 print (atoms.get_atomic_numbers())
 print (znucl)
 print (atoms.get_chemical_symbols())

@@ -286,13 +286,16 @@ print ("M3GNet_stress:\n", atoms.get_stress())
 ###################################################################################################
 
 
+
 from reformpy.calculator import Reform_Calculator
+
 from functools import reduce
 
 chem_nums = list(atoms.numbers)
 znucl_list = reduce(lambda re, x: re+[x] if x not in re else re, chem_nums, [])
 ntyp = len(znucl_list)
 znucl = znucl_list
+
 
 calc1 = Reform_Calculator(
             cutoff = 4.0,
