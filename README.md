@@ -2,6 +2,10 @@
 
 **A Python package for Rational Exploration of Fingerprint-Oriented Relaxation Methodology**
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Rutgers-ZRG/ReformPy/master/Reformpy_TOC.png" width="65%" alt="ReformPy TOC">
+</p>
+
 ### Implemented in Python3
 
 ## Dependencies
@@ -65,47 +69,159 @@ Following is an example to fix this issue using `MPICH` on CentOS cluster:
   python3 -m pip uninstall mpi4py
   python3 -m pip install --no-cache-dir "mpi4py<4.0"
   ```
-If you encounter errors when installing `qepy` from source, you probably need to modify the `setup.py` file.
+If you encounter errors when installing `qepy` from source, you probably need to manually set the build options and flags.
   ```bash
   python3 -m pip uninstall -y qepy
-  git clone --recurse-submodules https://gitlab.com/shaoxc/qepy.git
   cd qepy ; rm -rf build/ dist/ *.egg-info
   ```
-Following is an example with intel `MKL` library:
-  ```python
-  # Add following lines within build_extension function
-  # Set up Intel MKL environment if not already set
-  if 'MKLROOT' not in env:
-      env['MKLROOT'] = '/opt/sw/packages/intel/17.0.4/compilers_and_libraries/linux/mkl'
-      
-  # Make sure qedir is set correctly
-  if 'qedir' not in env or not env['qedir']:
-      env['qedir'] = os.path.join(os.environ.get("HOME"), "apps/qepy-qe-7.2")
-  
-  qedir_path = env['qedir']  # Store in local variable for later use
-  print(f"Using existing QE installation at: {qedir_path}", flush=True)
-  
-  # Set compilers to Intel
-  env['CC'] = 'icc'
-  env['FC'] = 'ifort'
-  env['F77'] = 'ifort'
-  env['F90'] = 'ifort'
-  env['MPIF90'] = env.get('I_MPI_ROOT', '/opt/sw/packages/intel/17.0.4/compilers_and_libraries/linux/mpi') + '/intel64/bin/mpiifort'
-  env['MPICC'] = env.get('I_MPI_ROOT', '/opt/sw/packages/intel/17.0.4/compilers_and_libraries/linux/mpi') + '/intel64/bin/mpiicc'
+Following is a `install_QEpy.sh` bash script using intel `MKL` library:
+  ```bash
+  #!/bin/bash
+
+  # Set the installation directory
+  QE_DIR=$HOME/apps/qepy-qe-7.2
+
+  # Clean the old installation
+  if [ -d "${QE_DIR}" ]; then
+      echo "Cleaning old QE installation..."
+      rm -rf ${QE_DIR}
+  fi
 
   # Set environment variables for compilation
-  env['CFLAGS'] = '-fPIC ' + env.get('CFLAGS', '')
-  env['FFLAGS'] = '-fPIC ' + env.get('FFLAGS', '')
-  
-  # Set MKL libraries
-  env['BLAS_LIBS'] = f"-L{env['MKLROOT']}/lib/intel64 -lmkl_intel_lp64 -lmkl_sequential -lmkl_core"
-  env['LAPACK_LIBS'] = ''  # LAPACK is included in MKL
-  
-  # Add to LD_LIBRARY_PATH
-  if 'LD_LIBRARY_PATH' in env:
-      env['LD_LIBRARY_PATH'] = f"{env['MKLROOT']}/lib/intel64:{env['LD_LIBRARY_PATH']}"
-  else:
-      env['LD_LIBRARY_PATH'] = f"{env['MKLROOT']}/lib/intel64"
+  export BLAS_LIBS="-L$MKLROOT/lib/intel64 -lmkl_intel_lp64 -lmkl_sequential -lmkl_core"
+  export LAPACK_LIBS="-L$MKLROOT/lib/intel64 -lmkl_intel_lp64 -lmkl_sequential -lmkl_core"
+  export CC=icc
+  export CXX=icpc
+  export FC=ifort
+  export F77=ifort
+  export F90=ifort
+  export MPIF90=mpif90
+  export MPICC=mpicc
+  export FFLAGS="-fPIC -O3"
+  export FCFLAGS="-fPIC -O3"
+  export CFLAGS="-fPIC -O3"
+  export try_foxflags="-fPIC"
+
+  # Extract QE from the release pack
+  echo "Extracting QE from release pack..."
+  mkdir -p ${QE_DIR}
+  tar -xzf $HOME/apps/qe-7.2-ReleasePack.tar.gz -C ${QE_DIR} --strip-components=1
+
+  # Configure QE with all necessary flags
+  echo "Configuring QE..."
+  cd ${QE_DIR}
+
+  # Create make.inc manually to ensure proper configuration
+  cat > make.inc << EOF
+  # make.inc for QE 7.2
+
+  DFLAGS         = -D__FFTW3 -D__MPI
+  FDFLAGS        = \$(DFLAGS)
+  IFLAGS         = -I. -I\$(TOPDIR)/include
+
+  CC             = icc
+  CFLAGS         = -fPIC -O3
+  CPPFLAGS       = -P -traditional -Uvector
+
+  F90            = ifort
+  MPIF90         = mpif90
+  F77            = ifort
+  FFLAGS         = -fPIC -O3
+  FFLAGS_NOOPT   = -O0 -g
+  F90FLAGS       = \$(FFLAGS) -cpp
+  F77FLAGS       = \$(FFLAGS)
+
+  LD             = mpif90
+  LDFLAGS        = -g
+
+  # BLAS and LAPACK
+  BLAS_LIBS      = -L\$(MKLROOT)/lib/intel64 -lmkl_intel_lp64 -lmkl_sequential -lmkl_core
+  LAPACK_LIBS    = -L\$(MKLROOT)/lib/intel64 -lmkl_intel_lp64 -lmkl_sequential -lmkl_core
+
+  # FFT (use MKL FFT)
+  FFT_LIBS       = -L\$(MKLROOT)/lib/intel64 -lmkl_intel_lp64 -lmkl_sequential -lmkl_core
+
+  # MPI
+  MPI_LIBS       =
+
+  # SCALAPACK (disabled)
+  SCALAPACK_LIBS =
+
+  # AR and ARFLAGS
+  AR             = ar
+  ARFLAGS        = ruv
+
+  # WGET
+  WGET           = wget -O
+
+  # ranlib
+  RANLIB         = ranlib
+  EOF
+
+  echo "Fixing specific files with FFTW3 allocate issue..."
+  if [ -f "FFTXlib/src/fft_scalar.FFTW3.f90" ]; then
+      sed -i 's/ALLOCATE( data_dp, MOLD=data_dp_aux )/ALLOCATE( data_dp(SIZE(data_dp_aux)) )/g' FFTXlib/src/fft_scalar.FFTW3.f90
+      sed -i 's/ALLOCATE( data_sp, MOLD=data_sp_aux )/ALLOCATE( data_sp(SIZE(data_sp_aux)) )/g' FFTXlib/src/fft_scalar.FFTW3.f90
+  fi
+
+  echo "Generating dependencies..."
+  for dir in LAXlib FFTXlib XClib UtilXlib upflib Modules PW PP KS_Solvers; do
+      echo "Generating dependencies for $dir..."
+      cd $dir
+      if [ -d "src" ]; then
+          cd src
+          touch make.depend
+          make depend
+          cd ..
+      else
+          touch make.depend
+          make depend
+      fi
+      cd ..
+  done
+
+  echo "Compiling QE..."
+  make all -j 8
+
+  echo "Cloning QEpy..."
+  cd ..
+  if [ -d "qepy" ]; then
+      echo "Cleaning old QEpy installation..."
+      rm -rf qepy
+  fi
+  git clone https://gitlab.com/shaoxc/qepy.git
+  cd qepy
+
+  export qedir=${QE_DIR}
+  export qepydev=no  # Clean build
+
+  echo "Installing QEpy..."
+  python3 -m pip install --no-cache-dir -e .
+
+  echo "Creating test script..."
+  cat > test_qepy.py << 'EOF'
+  #!/usr/bin/env python
+  import os
+  import sys
+
+  try:
+      import qepy
+      print("QEpy version:", qepy.__version__)
+      print("QE directory:", os.environ.get('qedir', 'Not set'))
+      print("QEpy successfully imported!")
+  except ImportError as e:
+      print("Error importing qepy:", e)
+
+  try:
+      import qepy.qepy_pw as qepy_pw
+      print("Successfully imported qepy_pw module!")
+  except ImportError as e:
+      print("Error importing qepy_pw:", e)
+  EOF
+
+  echo "Installation completed. Try running the test script:"
+  echo "export qedir=${QE_DIR}"
+  echo "python test_qepy.py"
   ```
 
 ## Usage
