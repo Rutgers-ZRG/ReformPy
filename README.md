@@ -1,9 +1,7 @@
-# Reformpy
-
-**A Python package for Rational Exploration of Fingerprint-Oriented Relaxation Methodology**
+# Reformpy: A Python package for Rational Exploration of Fingerprint-Oriented Relaxation Methodology
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Rutgers-ZRG/ReformPy/master/Reformpy_TOC.png" width="65%" alt="ReformPy TOC">
+  <img src="https://raw.githubusercontent.com/Rutgers-ZRG/ReformPy/master/Reformpy_TOC.png" width="100%" alt="ReformPy TOC">
 </p>
 
 ### Implemented in Python3
