@@ -774,10 +774,19 @@ def read_types(atoms: Atoms):
     Reads atomic types from an ASE Atoms object and returns an array of types.
     """
     atom_symbols = atoms.get_chemical_symbols()
-    unique_symbols, counts = np.unique(atom_symbols, return_counts=True)
     
-    types = []
-    for i in range(len(unique_symbols)):
-        types.extend([i + 1] * counts[i])  # Map atom type to integers starting from 1
+    # Track order of appearance and count unique elements
+    unique_symbols = []
+    symbol_to_idx = {}
+    
+    for symbol in atom_symbols:
+        if symbol not in symbol_to_idx:
+            symbol_to_idx[symbol] = len(unique_symbols)
+            unique_symbols.append(symbol)
+    
+    # Count occurrences of each symbol
+    counts = [atom_symbols.count(symbol) for symbol in unique_symbols]
+    # Create types array based on order of appearance
+    types = [symbol_to_idx[symbol] + 1 for symbol in atom_symbols]
 
     return np.array(types, dtype=int)
