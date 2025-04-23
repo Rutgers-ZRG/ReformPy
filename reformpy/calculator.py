@@ -1,4 +1,5 @@
 import numpy as np
+import os
 import ase.io
 from ase.atoms import Atoms
 from ase.calculators.calculator import Calculator
@@ -117,11 +118,23 @@ class Reform_Calculator(Calculator):
         # If no communicator is given, we can default to COMM_WORLD
         # or a "serial" communicator if you prefer:
         if comm is None:
-            comm = MPI.COMM_WORLD
+            try:
+                from mpi4py import MPI
+                comm = MPI.COMM_WORLD
+            except ImportError:
+                # Create a mock MPI communicator for serial runs
+                comm = SerialComm()
         
         self.comm = comm
-        self.rank = comm.Get_rank()
-        self.parallel = parallel
+        try:
+            self.rank = comm.Get_rank()
+            self.size = comm.Get_size()
+        except AttributeError:
+            # This might happen if we're not using a real MPI communicator
+            self.rank = 0
+            self.size = 1
+            
+        self.parallel = parallel and self.size > 1
 
         # Initialize parameter dictionaries
         self._store_param_state()  # Initialize an empty parameter state
@@ -132,10 +145,21 @@ class Reform_Calculator(Calculator):
                           **kwargs)
 
         # Set up atoms after parent initialization
-        if atoms is None:
-            atoms = ase.io.read(self.cell_file)
+        if atoms is None and os.path.exists(self.cell_file):
+            try:
+                atoms = ase.io.read(self.cell_file)
+            except Exception:
+                # Only print warning on rank 0
+                if self.rank == 0:
+                    print(f"Warning: Could not read atoms from {self.cell_file}")
+                atoms = None
+                
         self.atoms = atoms
         self.atoms_save = None
+        
+        # Print initialization info on rank 0
+        if self.rank == 0 and self.parallel:
+            print(f"Reform_Calculator initialized with {self.size} MPI processes", flush=True)
 
     def set(self, **kwargs):
         """Override the set function, to test for changes in the
@@ -182,13 +206,34 @@ class Reform_Calculator(Calculator):
         self._stress = None
 
     def check_restart(self, atoms = None):
-        self.atoms = atoms
-        if (self.atoms_save and atoms == self.atoms_save):
-            return False
+        """Check if we need to restart the calculation due to atoms change."""
+        restart = True
+
+        if atoms is None or (self.atoms_save and atoms == self.atoms_save):
+            restart = False
         else:
-            self.atoms_save = atoms.copy()
-            self.restart()
-            return True
+            # Atoms have changed, clear results
+            self.clear_results()
+            # Update atoms_save 
+            if atoms is not None:
+                self.atoms_save = atoms.copy()
+                self._atoms = atoms.copy()
+                # Update types
+                self._types = read_types(atoms)
+        
+        # If we're running in parallel, ensure all processes agree on restart
+        if self.parallel:
+            # Convert boolean to integer for MPI communication
+            restart_int = 1 if restart else 0
+            # Broadcast from rank 0 to ensure consistency
+            restart_int = self.comm.bcast(restart_int, root=0)
+            # Convert back to boolean
+            restart = bool(restart_int)
+            
+            # Synchronize here to make sure all processes have updated
+            self.comm.Barrier()
+
+        return restart
 
     def calculate(self,
                   atoms = None,
@@ -204,35 +249,32 @@ class Reform_Calculator(Calculator):
         check_atoms(atoms)
 
         self.clear_results()
-        '''
-        if atoms is not None:
-            self.atoms = atoms.copy()
-
-        if properties is None:
-            properties = self.implemented_properties
-        '''
+        
         Calculator.calculate(self, atoms, properties, system_changes)
         if atoms is None:
             atoms = self.atoms
-        # self.update_atoms(atoms)
-
-        # natoms = len(self.atoms)
-        # energies = np.ones(natoms, dtype = np.float64)
-        # identity = np.eye(3, dtype = np.float64)
-
-        # Per-atom energy has not been truely implemented yet, right now just returns average of cell energy with respect to total number of atoms in cell
-        # self.results['energies'] = self.get_potential_energy(atoms) * energies / natoms
-        self.results['energy'] = self.get_potential_energy(atoms)
-        self.results['forces'] = self.get_forces(atoms)
-        # Numerical forces, for verification
-        # self.results['forces'] = self.calculate_numerical_forces(atoms)
-        # Per-atom stress has not been truely implemented yet, right now just returns average of cell stress with respect to total number of atoms in cell
-        # self.results['stresses'] = np.stack( [np.matmul(identity, \
-        #                                                 self.get_stress(atoms))] * natoms ) / natoms
-        self.results['stress'] = self.get_stress(atoms)
-        # Numerical stress, for verification
-        # self.results['stress'] = self.calculate_numerical_stress(atoms)
-
+            
+        # Calculate all requested properties
+        if 'energy' in properties:
+            energy = self._compute_energy(atoms)
+            # If parallel, make sure all processes have the same result
+            if self.parallel:
+                energy = self.comm.bcast(energy, root=0)
+            self.results['energy'] = energy
+            
+        if 'forces' in properties:
+            forces = self._compute_forces(atoms)
+            # If parallel, make sure all processes have the same result
+            if self.parallel:
+                forces = self.comm.bcast(forces, root=0)
+            self.results['forces'] = forces
+            
+        if 'stress' in properties:
+            stress = self._compute_stress(atoms)
+            # If parallel, make sure all processes have the same result
+            if self.parallel:
+                stress = self.comm.bcast(stress, root=0)
+            self.results['stress'] = stress
 
     def check_state(self, atoms, tol = 1e-15):
         """Check for system changes since last calculation."""
@@ -374,62 +416,34 @@ class Reform_Calculator(Calculator):
         """MPI-aware energy computation."""
         if atoms is None:
             atoms = self.atoms
-        if self.check_restart(atoms) or self._energy is None:
-
-            if self.parallel:
-                # Only rank 0 does the real calculation
-                if self.rank == 0:
-                    energy = self._compute_energy(atoms)
-                else:
-                    energy = None
-
-                # Broadcast from rank 0 to all other ranks
-                energy = self.comm.bcast(energy, root=0)
-                self._energy = energy
-
-            else:
-                # Serial fallback (the original behavior)
-                self._energy = self._compute_energy(atoms)
-
-        return self._energy
+        
+        # Make sure we have the energy in the results
+        if 'energy' not in self.results or self.check_restart(atoms):
+            self.calculate(atoms=atoms, properties=['energy'])
+            
+        return self.results['energy']
 
     def get_forces(self, atoms = None, **kwargs):
         """MPI-aware forces computation."""
         if atoms is None:
             atoms = self.atoms
-
-        if self.check_restart(atoms) or self._forces is None:
-
-            if self.parallel:
-                if self.rank == 0:
-                    forces = self._compute_forces(atoms)
-                else:
-                    forces = None
-                forces = self.comm.bcast(forces, root=0)
-                self._forces = forces
-            else:
-                self._forces = self._compute_forces(atoms)
-
-        return self._forces
+            
+        # Make sure we have the forces in the results
+        if 'forces' not in self.results or self.check_restart(atoms):
+            self.calculate(atoms=atoms, properties=['forces'])
+            
+        return self.results['forces']
 
     def get_stress(self, atoms = None, **kwargs):
         """MPI-aware stress computation."""
         if atoms is None:
             atoms = self.atoms
-
-        if self.check_restart(atoms) or self._stress is None:
-
-            if self.parallel:
-                if self.rank == 0:
-                    stress = self._compute_stress(atoms)
-                else:
-                    stress = None
-                stress = self.comm.bcast(stress, root=0)
-                self._stress = stress
-            else:
-                self._stress = self._compute_stress(atoms)
-
-        return self._stress
+            
+        # Make sure we have the stress in the results
+        if 'stress' not in self.results or self.check_restart(atoms):
+            self.calculate(atoms=atoms, properties=['stress'])
+            
+        return self.results['stress']
 
     def _compute_energy(self, atoms):
         """Actual energy computation using fingerprint method."""
@@ -790,3 +804,19 @@ def read_types(atoms: Atoms):
     types = [symbol_to_idx[symbol] + 1 for symbol in atom_symbols]
 
     return np.array(types, dtype=int)
+
+# Add a simple serial communicator class for non-MPI runs
+class SerialComm:
+    """A simple serial communicator class to mimic MPI for single-process runs."""
+    
+    def Get_rank(self):
+        return 0
+    
+    def Get_size(self):
+        return 1
+    
+    def bcast(self, data, root=0):
+        return data
+    
+    def Barrier(self):
+        pass

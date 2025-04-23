@@ -2,6 +2,11 @@ import numpy as np
 
 from ase.calculators.calculator import Calculator, all_changes
 from ase.calculators.calculator import PropertyNotImplementedError
+from mpi4py import MPI
+from ase.parallel import world
+
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
 
 
 class LinearCombinationCalculator(Calculator):
@@ -117,20 +122,32 @@ class MixedCalculator(LinearCombinationCalculator):
         weight for calculator 2
     """
 
-    def __init__(self, calc1, calc2, iter_max = None):
+    def __init__(self, calc1, calc2, iter_max = None, comm=None):
         self.nonLinear_const = 3
         self.iter = 0
         if iter_max is not None:
             self.iter_max = iter_max*3
         else:
             self.iter_max = 300
+            
+        # Store MPI communicator if provided
+        self.comm = comm
+        if comm is not None:
+            self.rank = comm.Get_rank()
+            self.size = comm.Get_size()
+            self.parallel = True
+        else:
+            self.rank = 0
+            self.size = 1
+            self.parallel = False
+            
         self.weights = [0.0, 1.0]
         weight1 = self.weights[0]
         weight2 = self.weights[1]
         super().__init__([calc1, calc2], [weight1, weight2])
 
     def set_weights(self, calc1, calc2, atoms):
-
+        """Set weights for the two calculators based on iteration number."""
         if self.iter == 0:
             # fmax_1 = np.amax(np.absolute(calc1.get_forces(atoms)))
             # fmax_2 = np.amax(np.absolute(calc2.get_forces(atoms)))
@@ -147,7 +164,10 @@ class MixedCalculator(LinearCombinationCalculator):
                 # self.weights[0] = x_iter ** self.nonLinear_const
                 self.weights[0] = \
                                 0.5*(np.sin(-np.pi*0.5 + np.pi*9*x_iter**2) + 1.0)
-        # print("weights=", self.weights)
+                
+        # Ensure weights are synchronized if using MPI
+        if self.parallel:
+            self.weights = self.comm.bcast(self.weights, root=0)
 
     def calculate(self,
                   atoms = None,
@@ -157,47 +177,89 @@ class MixedCalculator(LinearCombinationCalculator):
         """ Calculates all the specific property for each calculator and returns
             with the summed value.
         """
-
-
-        super().calculate(atoms, properties, system_changes)
         atoms = atoms or self.atoms
+        if atoms is None:
+            raise ValueError("No atoms object provided to MixedCalculator")
+            
+        # Make sure all ranks have the same atoms
+        if self.parallel:
+            # Wait for all processes to reach this point
+            self.comm.Barrier()
+            
+        # Set weights based on current iteration
         self.set_weights(self.calcs[0], self.calcs[1], atoms)
-        # print("weights=", self.weights)
+        
+        # Initialize dictionaries on all ranks
+        self.results = {}
+        
+        # Calculate properties on all ranks for both calculators
+        for i, (w, calc) in enumerate(zip(self.weights, self.calcs)):
+            if w > 0.0:
+                # if self.rank == 0:
+                #     print(f"Running calculator {i+1} with weight {w}", flush=True)
+                
+                # Check if calculation is required
+                if calc.calculation_required(atoms, properties):
+                    # Calculate properties
+                    try:
+                        calc.calculate(atoms, properties, system_changes)
+                    except Exception as e:
+                        if self.rank == 0:
+                            print(f"Error in calculator {i+1}: {e}", flush=True)
+                        if self.parallel:
+                            self.comm.Barrier()  # Make sure all processes sync
+                        raise
+                
+                # Synchronize after each calculator
+                if self.parallel:
+                    self.comm.Barrier()
+        
+        # Collect and combine results
+        for prop in properties:
+            if prop in ['energy', 'forces', 'stress']:
+                # Initialize results with zeros
+                if prop == 'energy':
+                    result = 0.0
+                elif prop == 'forces':
+                    result = np.zeros((len(atoms), 3), dtype=float)
+                elif prop == 'stress':
+                    result = np.zeros(6, dtype=float)
+                
+                # Add weighted contributions from each calculator
+                for i, (w, calc) in enumerate(zip(self.weights, self.calcs)):
+                    if w > 0.0:
+                        if prop in calc.results:
+                            result += w * calc.results[prop]
+                
+                # Store the result
+                self.results[prop] = result
+                
+                # Store contributions for special properties
+                if prop == 'energy':
+                    energy_contributions = tuple(
+                        calc.results.get('energy', 0.0) if w > 0.0 else 0.0 
+                        for w, calc in zip(self.weights, self.calcs)
+                    )
+                    self.results['energy_contributions'] = energy_contributions
+                elif prop == 'forces':
+                    force_contributions = tuple(
+                        calc.results.get('forces', np.zeros((len(atoms), 3), dtype=float)) 
+                        if w > 0.0 else np.zeros((len(atoms), 3), dtype=float)
+                        for w, calc in zip(self.weights, self.calcs)
+                    )
+                    self.results['force_contributions'] = force_contributions
+                elif prop == 'stress':
+                    stress_contributions = tuple(
+                        calc.results.get('stress', np.zeros(6, dtype=float)) 
+                        if w > 0.0 else np.zeros(6, dtype=float)
+                        for w, calc in zip(self.weights, self.calcs)
+                    )
+                    self.results['stress_contributions'] = stress_contributions
+        
+        # Ensure all processes have incremented the iteration counter
+        if self.parallel:
+            self.comm.Barrier()
         self.iter = self.iter + 1
-
-        if 'energy' in properties:
-            if self.weights[0] > 0.0:
-                energy1 = self.calcs[0].get_potential_energy(atoms)
-            else:
-                energy1 = 0.0
-            if self.weights[1] > 0.0:
-                energy2 = self.calcs[1].get_potential_energy(atoms)
-            else:
-                energy2 = 0.0
-            self.results['energy_contributions'] = (energy1, energy2)
-
-        if 'forces' in properties:
-            if self.weights[0] > 0.0:
-                force1 = self.calcs[0].get_forces(atoms)
-            else:
-                force1 = np.zeros((len(atoms), 3), dtype = float)
-            if self.weights[1] > 0.0:
-                force2 = self.calcs[1].get_forces(atoms)
-            else:
-                force2 = np.zeros((len(atoms), 3), dtype = float)
-            self.results['force_contributions'] = (force1, force2)
-
-        if 'stress' in properties:
-            if self.weights[0] > 0.0:
-                stress1 = self.calcs[0].get_stress(atoms)
-            else:
-                stress1 = np.zeros(6, dtype = float)
-            if self.weights[1] > 0.0:
-                stress2 = self.calcs[1].get_stress(atoms)
-            else:
-                stress2 = np.zeros(6, dtype = float)
-            self.results['stress_contributions'] = (stress1, stress2)
-
 
     def get_energy_contributions(self, atoms = None):
         """ Return the potential energy from calc1 and calc2 respectively """
