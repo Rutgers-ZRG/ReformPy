@@ -81,7 +81,8 @@ class Reform_Calculator(Calculator):
                           'nx': 300,
                           'lmax': 0,
                           'cutoff': 4.0,
-                          'znucl': None
+                          'znucl': None,
+                          'stress_mode': 'finite'
                           }
 
     nolabel = True
@@ -508,16 +509,62 @@ class Reform_Calculator(Calculator):
 
     def _compute_stress(self, atoms):
         """Actual stress computation using virial theorem."""
-        lat = atoms.cell[:]
-        rxyz = atoms.get_positions()
-        forces = atoms.get_forces()
-        
-        lat = np.array(lat, dtype=np.float64)
-        rxyz = np.array(rxyz, dtype=np.float64)
-        forces = np.array(forces, dtype=np.float64)
-        
-        stress = get_stress(lat, rxyz, forces)
-        return stress
+        mode = self.default_parameters.get('stress_mode')
+        if mode == 'analytical':
+            lat = atoms.cell[:]
+            rxyz = atoms.get_positions()
+            forces = atoms.get_forces()
+            
+            lat = np.array(lat, dtype=np.float64)
+            rxyz = np.array(rxyz, dtype=np.float64)
+            forces = np.array(forces, dtype=np.float64)
+            
+            stress = get_stress(lat, rxyz, forces)
+            return stress
+        elif mode == 'finite':
+            return self._compute_stress_fd(atoms)
+        else:
+            raise ValueError(f"Unknown stress_mode '{mode}'.")
+    
+
+    def _compute_stress_fd(self, atoms: Atoms, delta: float = 1e-3):
+        """
+        σ_αβ = (1/V) ∂E/∂ε_αβ   →   central finite difference with ±δ strain.
+        Off-diagonal strains use ε = γ/2, so we multiply by 2 at the end.
+        """
+        # Reference energy and volume
+        e0 = self._compute_energy(atoms)
+        V0 = atoms.get_volume()
+        C0 = atoms.get_cell()          # 3×3 matrix
+        _voigt_pairs = [(0, 0), (1, 1), (2, 2), (1, 2), (0, 2), (0, 1)]
+        stress_voigt = np.zeros(6)
+
+        for iv, (a, b) in enumerate(_voigt_pairs):
+            # ε tensor with only one non-zero component
+            eps = np.zeros((3, 3))
+            eps[a, b] = eps[b, a] = delta   # symmetric strain
+
+            # +δ strain
+            atoms_p = atoms.copy()
+            atoms_p.set_cell((np.eye(3) + eps) @ C0, scale_atoms=True)
+            e_plus = self._compute_energy(atoms_p)
+
+            # −δ strain
+            atoms_m = atoms.copy()
+            atoms_m.set_cell((np.eye(3) - eps) @ C0, scale_atoms=True)
+            e_minus = self._compute_energy(atoms_m)
+
+            dE = (e_plus - e_minus) / (2.0 * delta)
+            σ = dE / V0
+
+            # Off-diagonals: ε_yz, ε_xz, ε_xy are half the engineering shear γ,
+            # so multiply the derivative by 2 to get the Cauchy stress.
+            if iv >= 3:
+                σ *= 2.0
+
+            stress_voigt[iv] = σ
+
+        return stress_voigt
 
     def test_energy_consistency(self, atoms = None, **kwargs):
         contract = self.contract
