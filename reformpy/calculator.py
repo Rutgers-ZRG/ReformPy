@@ -114,7 +114,8 @@ class Reform_Calculator(Calculator):
         self._atoms = None
         self._types = None
         self.cell_file = 'POSCAR'
-        self.default_parameters = {}
+        # Start from the class-level defaults so downstream calls have valid keys
+        self.default_parameters = self.__class__.default_parameters.copy()
         
         # If no communicator is given, we can default to COMM_WORLD
         # or a "serial" communicator if you prefer:

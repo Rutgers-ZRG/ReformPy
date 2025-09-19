@@ -125,8 +125,11 @@ class MixedCalculator(LinearCombinationCalculator):
     def __init__(self, calc1, calc2, iter_max = None, comm=None):
         self.nonLinear_const = 3
         self.iter = 0
+        self._last_positions = None
         if iter_max is not None:
-            self.iter_max = iter_max*3
+            if iter_max <= 0:
+                raise ValueError('iter_max must be a positive integer')
+            self.iter_max = int(iter_max)
         else:
             self.iter_max = 300
             
@@ -142,33 +145,71 @@ class MixedCalculator(LinearCombinationCalculator):
             self.parallel = False
             
         self.weights = [0.0, 1.0]
+        self._last_weights = tuple(self.weights)
+        self._weights_changed_last_call = True
         weight1 = self.weights[0]
         weight2 = self.weights[1]
         super().__init__([calc1, calc2], [weight1, weight2])
 
     def set_weights(self, calc1, calc2, atoms):
         """Set weights for the two calculators based on iteration number."""
-        if self.iter == 0:
+        effective_iter = min(self.iter, self.iter_max)
+
+        if effective_iter == 0:
             # fmax_1 = np.amax(np.absolute(calc1.get_forces(atoms)))
             # fmax_2 = np.amax(np.absolute(calc2.get_forces(atoms)))
             # self.f_ratio = fmax_1 / fmax_2
-            self.weights[0] = 0.0
-            self.weights[1] = 1.0
-
-        if self.iter >= self.iter_max:
-            self.weights[0] = 1.0
-            self.weights[1] = 0.0
+            weight0 = 0.0
+        elif effective_iter >= self.iter_max:
+            weight0 = 1.0
         else:
-            if ((self.iter+1) % 3) != 0:
-                x_iter = ( 3 * (self.iter // 3) ) / (self.iter_max - 3)
-                # self.weights[0] = x_iter ** self.nonLinear_const
-                self.weights[0] = \
-                                0.5*(np.sin(-np.pi*0.5 + np.pi*9*x_iter**2) + 1.0)
-                
+            # Smoothly ramp the contribution of calc1 from 0 to 1
+            progress = effective_iter / max(self.iter_max - 1, 1)
+            weight0 = 0.5 * (np.sin(-np.pi * 0.5 + np.pi * 9 * progress ** 2) + 1.0)
+
+        # Ensure numerical safety and that the two weights sum to 1.0
+        weight0 = float(np.clip(weight0, 0.0, 1.0))
+        weight1 = 1.0 - weight0
+
+        prev_weights = self._last_weights
+        new_weights = (weight0, weight1)
+
+        self.weights[0] = weight0
+        self.weights[1] = weight1
+        self._last_weights = new_weights
+
+        changed = not np.allclose(prev_weights, new_weights, rtol=0.0, atol=1e-12)
+        self._weights_changed_last_call = changed
+
         # Ensure weights are synchronized if using MPI
         if self.parallel:
-            self.weights = self.comm.bcast(self.weights, root=0)
+            self.weights = self.comm.bcast(self.weights if self.rank == 0 else None, root=0)
+            changed = self.comm.bcast(changed if self.rank == 0 else None, root=0)
+            self._weights_changed_last_call = bool(changed)
 
+    def _update_iteration_counter(self, atoms):
+        """Increment iteration counter only when atomic positions change."""
+        positions = atoms.get_positions()
+
+        if self._last_positions is None:
+            changed = False
+        else:
+            changed = not np.allclose(positions, self._last_positions,
+                                       rtol=0.0, atol=1e-12)
+
+        if self.parallel:
+            changed = self.comm.bcast(changed if self.rank == 0 else None, root=0)
+
+        if self._last_positions is None or changed:
+            self._last_positions = np.array(positions, copy=True)
+
+        if changed:
+            self.iter += 1
+
+        # Synchronize iteration counter across ranks
+        if self.parallel:
+            self.iter = self.comm.bcast(self.iter if self.rank == 0 else None, root=0)
+                
     def calculate(self,
                   atoms = None,
                   properties = ['energy', 'forces', 'stress'],
@@ -186,6 +227,9 @@ class MixedCalculator(LinearCombinationCalculator):
             # Wait for all processes to reach this point
             self.comm.Barrier()
             
+        # Update iteration counter before adjusting weights
+        self._update_iteration_counter(atoms)
+
         # Set weights based on current iteration
         self.set_weights(self.calcs[0], self.calcs[1], atoms)
         
@@ -256,10 +300,18 @@ class MixedCalculator(LinearCombinationCalculator):
                     )
                     self.results['stress_contributions'] = stress_contributions
         
-        # Ensure all processes have incremented the iteration counter
+        # Ensure all processes have completed the calculation
         if self.parallel:
             self.comm.Barrier()
-        self.iter = self.iter + 1
+
+    def reset(self):
+        """Reset calculators and internal mixing state."""
+        super().reset()
+        self.iter = 0
+        self._last_positions = None
+        self.weights = [0.0, 1.0]
+        self._last_weights = tuple(self.weights)
+        self._weights_changed_last_call = True
 
     def get_energy_contributions(self, atoms = None):
         """ Return the potential energy from calc1 and calc2 respectively """
@@ -320,4 +372,3 @@ class AverageCalculator(LinearCombinationCalculator):
 
         weights = [1 / n] * n
         super().__init__(calcs, weights, atoms)
-
