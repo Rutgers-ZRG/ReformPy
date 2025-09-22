@@ -256,24 +256,67 @@ class Reform_Calculator(Calculator):
         if atoms is None:
             atoms = self.atoms
             
-        # Calculate all requested properties
-        if 'energy' in properties:
-            energy = self._compute_energy(atoms)
-            # If parallel, make sure all processes have the same result
+        need_energy = 'energy' in properties
+        need_forces = 'forces' in properties
+        need_stress = 'stress' in properties
+        stress_mode = self.default_parameters.get('stress_mode')
+
+        need_dfp = need_forces or (need_stress and stress_mode == 'analytical')
+        include_stress = need_stress and stress_mode == 'analytical'
+
+        fp_data = None
+
+        if need_dfp:
+            fp_data = self._prepare_fp_data(atoms, need_dfp=True, include_stress=include_stress)
+            energy_val, forces_val = get_ef(fp_data['fp'], fp_data['dfp'], fp_data['ntyp'], fp_data['types'])
+
+            if need_energy:
+                energy = energy_val
+                if self.parallel:
+                    energy = self.comm.bcast(energy, root=0)
+                self.results['energy'] = energy
+
+            if need_forces:
+                forces = forces_val
+                if self.parallel:
+                    forces = self.comm.bcast(forces, root=0)
+                self.results['forces'] = forces
+
+            if include_stress:
+                stress_components = get_stress_components(
+                    fp_data['fp'], fp_data['dfpe'], fp_data['ntyp'], fp_data['types']
+                )
+                stress = stress_components / atoms.get_volume()
+                if self.parallel:
+                    stress = self.comm.bcast(stress, root=0)
+                self.results['stress'] = stress
+
+        if need_energy and 'energy' not in self.results:
+            fp_data_energy = self._prepare_fp_data(atoms, need_dfp=False)
+            energy = get_fpe(fp_data_energy['fp'], fp_data_energy['ntyp'], fp_data_energy['types'])
             if self.parallel:
                 energy = self.comm.bcast(energy, root=0)
             self.results['energy'] = energy
-            
-        if 'forces' in properties:
-            forces = self._compute_forces(atoms)
-            # If parallel, make sure all processes have the same result
+
+        if need_forces and 'forces' not in self.results:
+            fp_data_forces = self._prepare_fp_data(atoms, need_dfp=True, include_stress=False)
+            _energy_dummy, forces = get_ef(
+                fp_data_forces['fp'], fp_data_forces['dfp'], fp_data_forces['ntyp'], fp_data_forces['types']
+            )
             if self.parallel:
                 forces = self.comm.bcast(forces, root=0)
             self.results['forces'] = forces
-            
-        if 'stress' in properties:
-            stress = self._compute_stress(atoms)
-            # If parallel, make sure all processes have the same result
+
+        if need_stress and 'stress' not in self.results:
+            if stress_mode == 'analytical':
+                fp_data_stress = self._prepare_fp_data(atoms, need_dfp=True, include_stress=True)
+                stress_components = get_stress_components(
+                    fp_data_stress['fp'], fp_data_stress['dfpe'], fp_data_stress['ntyp'], fp_data_stress['types']
+                )
+                stress = stress_components / atoms.get_volume()
+            else:
+                stress = self._compute_stress_fd(atoms)
+
             if self.parallel:
                 stress = self.comm.bcast(stress, root=0)
             self.results['stress'] = stress
@@ -447,81 +490,88 @@ class Reform_Calculator(Calculator):
             
         return self.results['stress']
 
-    def _compute_energy(self, atoms):
-        """Actual energy computation using fingerprint method."""
-        contract = self.contract
-        ntyp = self.ntyp
-        nx = self.nx
-        lmax = self.lmax
-        cutoff = self.cutoff
+    def _prepare_fp_data(self, atoms, need_dfp=False, include_stress=False):
+        """Return fingerprint data and typed inputs for energy/force/stress calculations."""
+        lat = np.array(atoms.cell[:], dtype=np.float64)
+        rxyz = np.array(atoms.get_positions(), dtype=np.float64)
+
         types = self.types
-        znucl = self.znucl
-        
-        lat = atoms.cell[:]
-        rxyz = atoms.get_positions()
         if types is None:
             types = read_types(atoms)
-        
-        lat = np.array(lat, dtype=np.float64)
-        rxyz = np.array(rxyz, dtype=np.float64)
-        types = np.int32(types)
-        znucl = np.int32(znucl)
-        ntyp = np.int32(ntyp)
-        nx = np.int32(nx)
-        lmax = np.int32(lmax)
-        cutoff = np.float64(cutoff)
+        types_arr = np.array(types, dtype=np.int32)
 
-        cell = (lat, rxyz, types, znucl)
-        fp = libfp.get_lfp(cell, cutoff=cutoff, log=False, natx=nx)
-        fp = np.float64(fp)
-        fpe = get_fpe(fp, ntyp=ntyp, types=types)
+        znucl = self.znucl
+        if znucl is None:
+            raise ValueError("znucl must be set before computing energy/forces/stress")
+        znucl_arr = np.array(znucl, dtype=np.int32)
+
+        ntyp = int(self.ntyp)
+        nx = int(self.nx)
+        lmax = int(self.lmax)
+        cutoff = float(self.cutoff)
+
+        cell = (lat, rxyz, types_arr, znucl_arr)
+
+        if need_dfp:
+            result = libfp.get_dfp(
+                cell,
+                cutoff=cutoff,
+                log=False,
+                natx=nx,
+                include_stress=include_stress,
+            )
+            if include_stress:
+                fp_raw, dfp_raw, dfpe_raw = result
+            else:
+                fp_raw, dfp_raw = result
+                dfpe_raw = None
+
+            fp = np.array(fp_raw, dtype=np.float64)
+            dfp = np.array(dfp_raw, dtype=np.float64)
+            dfpe = np.array(dfpe_raw, dtype=np.float64) if dfpe_raw is not None else None
+        else:
+            fp_raw = libfp.get_lfp(cell, cutoff=cutoff, log=False, natx=nx)
+            fp = np.array(fp_raw, dtype=np.float64)
+            dfp = None
+            dfpe = None
+
+        return {
+            'fp': fp,
+            'dfp': dfp,
+            'dfpe': dfpe,
+            'lat': lat,
+            'rxyz': rxyz,
+            'types': types_arr,
+            'znucl': znucl_arr,
+            'ntyp': np.int32(ntyp),
+            'nx': nx,
+            'lmax': lmax,
+            'cutoff': cutoff,
+        }
+
+    def _compute_energy(self, atoms):
+        """Actual energy computation using fingerprint method."""
+        data = self._prepare_fp_data(atoms, need_dfp=False)
+        fpe = get_fpe(data['fp'], data['ntyp'], data['types'])
         return fpe
 
     def _compute_forces(self, atoms):
         """Actual forces computation using fingerprint method."""
-        contract = self.contract
-        ntyp = self.ntyp
-        nx = self.nx
-        lmax = self.lmax
-        cutoff = self.cutoff
-        types = self.types
-        znucl = self.znucl
-        
-        lat = atoms.cell[:]
-        rxyz = atoms.get_positions()
-        if types is None:
-            types = read_types(atoms)
-        
-        lat = np.array(lat, dtype=np.float64)
-        rxyz = np.array(rxyz, dtype=np.float64)
-        types = np.int32(types)
-        znucl = np.int32(znucl)
-        ntyp = np.int32(ntyp)
-        nx = np.int32(nx)
-        lmax = np.int32(lmax)
-        cutoff = np.float64(cutoff)
-
-        cell = (lat, rxyz, types, znucl)
-        fp, dfp = libfp.get_dfp(cell, cutoff=cutoff, log=False, natx=nx)
-        fp = np.float64(fp)
-        dfp = np.array(dfp, dtype=np.float64)
-        fpe, fpf = get_ef(fp, dfp, ntyp=ntyp, types=types)
-        return fpf
+        data = self._prepare_fp_data(atoms, need_dfp=True, include_stress=False)
+        _energy, forces = get_ef(data['fp'], data['dfp'], data['ntyp'], data['types'])
+        return forces
 
     def _compute_stress(self, atoms):
         """Actual stress computation using virial theorem."""
         mode = self.default_parameters.get('stress_mode')
         if mode == 'analytical':
-            lat = atoms.cell[:]
-            rxyz = atoms.get_positions()
-            forces = atoms.get_forces()
-            
-            lat = np.array(lat, dtype=np.float64)
-            rxyz = np.array(rxyz, dtype=np.float64)
-            forces = np.array(forces, dtype=np.float64)
-            
-            stress = get_stress(lat, rxyz, forces)
-            return stress
+            data = self._prepare_fp_data(atoms, need_dfp=True, include_stress=True)
+            stress_components = get_stress_components(
+                data['fp'], data['dfpe'], data['ntyp'], data['types']
+            )
+            volume = atoms.get_volume()
+            stress_voigt = stress_components / volume
+            return stress_voigt
         elif mode == 'finite':
             return self._compute_stress_fd(atoms)
         else:
@@ -531,7 +581,7 @@ class Reform_Calculator(Calculator):
     def _compute_stress_fd(self, atoms: Atoms, delta: float = 1e-3):
         """
         σ_αβ = (1/V) ∂E/∂ε_αβ   →   central finite difference with ±δ strain.
-        Off-diagonal strains use ε = γ/2, so we multiply by 2 at the end.
+        Off-diagonal strains use ε = γ/2, so we apply half the strain increment.
         """
         # Reference energy and volume
         e0 = self._compute_energy(atoms)
@@ -543,7 +593,10 @@ class Reform_Calculator(Calculator):
         for iv, (a, b) in enumerate(_voigt_pairs):
             # ε tensor with only one non-zero component
             eps = np.zeros((3, 3))
-            eps[a, b] = eps[b, a] = delta   # symmetric strain
+            if a == b:
+                eps[a, b] = delta
+            else:
+                eps[a, b] = eps[b, a] = 0.5 * delta
 
             # +δ strain
             atoms_p = atoms.copy()
@@ -556,14 +609,7 @@ class Reform_Calculator(Calculator):
             e_minus = self._compute_energy(atoms_m)
 
             dE = (e_plus - e_minus) / (2.0 * delta)
-            σ = dE / V0
-
-            # Off-diagonals: ε_yz, ε_xz, ε_xy are half the engineering shear γ,
-            # so multiply the derivative by 2 to get the Cauchy stress.
-            if iv >= 3:
-                σ *= 2.0
-
-            stress_voigt[iv] = σ
+            stress_voigt[iv] = dE / V0
 
         return stress_voigt
 
@@ -732,13 +778,11 @@ def get_ef(fp, dfp, ntyp, types):
                     vij = fp[i] - fp[j]
                     t = np.vdot(vij, vij)
                     e0 += t
-            e0 += 1.0/(np.linalg.norm(fp[i]) ** 2)
         # print ("e0", e0)
         e += e0
     # print ("e", e)
 
     force_0 = np.zeros((nat, 3), dtype = np.float64)
-    force_prime = np.zeros((nat, 3), dtype = np.float64)
 
     for k in range(nat):
         for ityp in range(ntyp):
@@ -751,10 +795,7 @@ def get_ef(fp, dfp, ntyp, types):
                         for l in range(3):
                             t = -2 * np.vdot(vij, dvij[l])
                             force_0[k][l] += t
-                for m in range(3):
-                    t_prime = 2.0 * np.vdot(fp[i],dfp[i][k][m]) / (np.linalg.norm(fp[i]) ** 4)
-                    force_prime[k][m] += t_prime
-    force = force_0 + force_prime
+    force = force_0
     force = force - np.sum(force, axis=0)/len(force)
     # return ((e+1.0)*np.log(e+1.0)-e), force*np.log(e+1.0) 
     return e, force
@@ -774,7 +815,6 @@ def get_fpe(fp, ntyp, types):
                     vij = fp[i] - fp[j]
                     t = np.vdot(vij, vij)
                     e0 += t
-            e0 += 1.0/(np.linalg.norm(fp[i]) ** 2)
         e += e0
     # return ((e+1.0)*np.log(e+1.0)-e)
     return e
@@ -868,3 +908,45 @@ class SerialComm:
     
     def Barrier(self):
         pass
+
+
+@jit(nopython=True, cache=True)
+def get_stress_components(fp, dfpe, ntyp, types):
+    """Optimized stress calculation with JIT compilation."""
+    nat = fp.shape[0]
+    fp_len = fp.shape[1]
+    stress = np.zeros(6, dtype=np.float64)
+
+    # Vectorized version for better performance
+    for ityp in range(ntyp):
+        itype = ityp + 1
+        type_mask = (types == itype)
+        n_type = np.sum(type_mask)
+
+        if n_type == 0:
+            continue
+
+        # Get indices of atoms of this type
+        type_indices = np.where(type_mask)[0]
+
+        # Compute gradient more efficiently
+        for idx_i, i in enumerate(type_indices):
+            gradient_i = np.zeros(fp_len, dtype=np.float64)
+
+            # Accumulate differences (vectorized inner loop)
+            for idx_j, j in enumerate(type_indices):
+                for m in range(fp_len):
+                    gradient_i[m] += fp[i, m] - fp[j, m]
+
+            # Scale gradient
+            for m in range(fp_len):
+                gradient_i[m] *= 4.0
+
+            # Accumulate stress contributions
+            for comp in range(6):
+                accum = 0.0
+                for m in range(fp_len):
+                    accum += gradient_i[m] * dfpe[i, comp, m]
+                stress[comp] += accum
+
+    return stress
