@@ -396,20 +396,8 @@ If you use Reformpy in your research, please cite:
 
 ## License
 
-Reformpy is released under the MIT License. See [LICENSE](LICENSE) for details.
+Reformpy is released under the MIT License.
 
-## Support
-
-- 📧 **Email**: [support@reformpy.org](mailto:support@reformpy.org)
-- 🐛 **Issues**: [GitHub Issues](https://github.com/Rutgers-ZRG/ReformPy/issues)
-- 📖 **Documentation**: [Full Documentation](https://reformpy.readthedocs.io)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/Rutgers-ZRG/ReformPy/discussions)
-
-## Acknowledgments
-
-- Rutgers University Zero-temperature Rational Structure Generation Group
-- Contributors to the libfp fingerprint library
-- ASE development team
 
 ---
 
