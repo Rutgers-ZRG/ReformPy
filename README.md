@@ -5,7 +5,7 @@
 </p>
 
 [![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![License](https://img.shields.io/badge/license-ASL-yellow)](LICENSE.md)
 [![Version](https://img.shields.io/badge/version-1.4.0-orange)](https://github.com/Rutgers-ZRG/ReformPy)
 
 ## Overview
@@ -15,13 +15,6 @@
 - **Reform_Calculator**: Original fingerprint-based calculator for symmetry-driven optimization
 - **EntropyMaximizingCalculator**: New wrapper that adds entropy maximization to ANY ASE calculator
 
-### Key Features
-
-✨ **Modular Design** - Use Reform_Calculator alone or wrap ANY calculator with entropy
-⚡ **High Performance** - JIT-compiled with Numba, MPI support for parallel computing
-🔧 **Universal Wrapper** - Add entropy maximization to VASP, QE, EMT, or any ASE calculator
-📊 **Advanced Metrics** - Fingerprint-based similarity and entropy calculations
-🎯 **Production Ready** - Extensive testing, documentation, and examples
 
 ## What's New in v1.4.0
 
@@ -396,7 +389,9 @@ If you use Reformpy in your research, please cite:
 
 ## License
 
-Reformpy is released under the MIT License.
+Reformpy is released under the **Academic Software Licence ("ASL")**. See [LICENSE.md](LICENSE.md) for details.
+
+**Important**: ASL is an academic non-commercial license. For commercial use, please contact the rights holders.
 
 
 ---
