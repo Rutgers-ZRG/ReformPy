@@ -193,7 +193,7 @@ def calculate_entropy_gradient_jit(fp, dfp, min_threshold=1e-8):
                     deriv_dot += deriv_diff * fpdiff[m]
 
                 # Add contribution to gradient
-                entropy_grad[i, k] -= (1.0 / nat) * deriv_dot / (deltaq * deltaq)
+                entropy_grad[i, k] += (1.0 / nat) * deriv_dot / (deltaq * deltaq)
 
     return entropy_grad
 
@@ -317,7 +317,7 @@ def calculate_entropy_gradient(fp, dfp, min_threshold=1e-8):
         for i in range(nat):
             for k in range(3):
                 deriv_diff = dfp[j, i, k] - dfp[l_j, i, k]
-                numerator = -np.dot(deriv_diff, fpdiff) / nat
+                numerator = np.dot(deriv_diff, fpdiff) / nat
                 denominator = deltaq * deltaq
                 entropy_grad[i, k] += numerator / denominator
 

@@ -6,17 +6,17 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-ASL-yellow)](LICENSE.md)
-[![Version](https://img.shields.io/badge/version-1.4.0-orange)](https://github.com/Rutgers-ZRG/ReformPy)
+[![Version](https://img.shields.io/badge/version-2.0.0-orange)](https://github.com/Rutgers-ZRG/ReformPy)
 
 ## Overview
 
-**Reformpy** is a high-performance Python package for structure optimization using atomic fingerprints. Version 1.4.0 introduces modular entropy maximization capabilities:
+**Reformpy** is a high-performance Python package for structure optimization using atomic fingerprints. Version 2.0.0 includes critical bug fixes for entropy maximization:
 
 - **Reform_Calculator**: Original fingerprint-based calculator for symmetry-driven optimization
 - **EntropyMaximizingCalculator**: New wrapper that adds entropy maximization to ANY ASE calculator
 
 
-## What's New in v1.4.0
+## What's New in v2.0.0
 
 - 🆕 **EntropyMaximizingCalculator**: Universal wrapper to add entropy to any calculator
 - 🆕 **Modular Architecture**: Clean separation between fingerprint and entropy calculations
@@ -95,20 +95,20 @@ print(f"Energy: {atoms.get_potential_energy():.4f} eV")
 ### Entropy Maximization - For ML Training Data
 
 ```python
-from reformpy import wrap_calculator_with_entropy, Reform_Calculator
+from reformpy import EntropyMaximizingCalculator, Reform_Calculator
 
-# Option 1: Wrap Reform_Calculator with entropy
+# Option 1: Add entropy to Reform_Calculator
 base_calc = Reform_Calculator(atoms=atoms, ntyp=1, nx=300, cutoff=6.0, znucl=[29])
-calc = wrap_calculator_with_entropy(
-    base_calc,
+calc = EntropyMaximizingCalculator(
+    calculator=base_calc,
     k_factor=5.0,    # Entropy weight
     cutoff=6.0       # Fingerprint cutoff for entropy
 )
 
-# Option 2: Wrap any other calculator (e.g., DFT)
+# Option 2: Add entropy to any other calculator (e.g., DFT)
 from ase.calculators.vasp import Vasp
 vasp_calc = Vasp(...)
-calc = wrap_calculator_with_entropy(vasp_calc, k_factor=2.0)
+calc = EntropyMaximizingCalculator(calculator=vasp_calc, k_factor=2.0, cutoff=4.0)
 
 atoms.calc = calc
 
@@ -125,14 +125,14 @@ print(f"Entropy: {calc.get_entropy(atoms):.4f}")
 ### Universal Wrapper - Works with ANY Calculator
 
 ```python
-from reformpy import wrap_calculator_with_entropy
+from reformpy import EntropyMaximizingCalculator
 from ase.calculators.emt import EMT  # Or any ASE calculator
 
-# Wrap any calculator with entropy maximization
-calc = wrap_calculator_with_entropy(
-    EMT(),           # Base calculator
-    k_factor=1.0,    # Entropy weight
-    cutoff=5.0       # Fingerprint cutoff
+# Add entropy maximization to any calculator
+calc = EntropyMaximizingCalculator(
+    calculator=EMT(),  # Base calculator
+    k_factor=1.0,      # Entropy weight
+    cutoff=5.0         # Fingerprint cutoff
 )
 
 atoms.calc = calc
@@ -141,7 +141,7 @@ energy = atoms.get_potential_energy()
 
 ## Architecture & Design
 
-The modular design of Reformpy v1.4.0 allows maximum flexibility:
+The modular design of Reformpy v2.0.0 allows maximum flexibility:
 
 ```
 ┌─────────────────────────────────────┐
@@ -253,7 +253,8 @@ from ase.md import VelocityVerlet
 from ase import units
 
 # MD with entropy maximization
-calc = Reform_Calculator(mode='entropy', k_entropy=5.0, **params)
+base_calc = Reform_Calculator(**params)
+calc = EntropyMaximizingCalculator(calculator=base_calc, k_factor=5.0, cutoff=4.0)
 atoms.calc = calc
 
 dyn = VelocityVerlet(atoms, timestep=1.0*units.fs)
@@ -269,14 +270,14 @@ for i in range(100):
 ### Comparing Symmetry vs Entropy Optimization
 
 ```python
-# Compare Reform_Calculator (symmetry) vs wrapped with entropy
+# Compare Reform_Calculator (symmetry) vs with entropy
 atoms_sym = atoms.copy()
 calc_sym = Reform_Calculator(**params)
 atoms_sym.calc = calc_sym
 
 atoms_ent = atoms.copy()
 base_calc = Reform_Calculator(**params)
-calc_ent = wrap_calculator_with_entropy(base_calc, k_factor=5.0)
+calc_ent = EntropyMaximizingCalculator(calculator=base_calc, k_factor=5.0, cutoff=4.0)
 atoms_ent.calc = calc_ent
 
 # Optimize both

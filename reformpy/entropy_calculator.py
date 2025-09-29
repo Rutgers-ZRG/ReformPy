@@ -140,8 +140,9 @@ class EntropyMaximizingCalculator(Calculator):
                 fp_data['fp'], fp_data['dfp'], self.entropy_threshold
             )
 
-            # Combine: F = F_base - k * ∇S
-            total_forces = base_forces - self.k_factor * entropy_grad
+            # Combine: F = F_base + k * ∇S (to maximize entropy)
+            # Since E = E_base - k*S, then F = -dE/dr = F_base + k*dS/dr
+            total_forces = base_forces + self.k_factor * entropy_grad
 
             self.results['forces'] = total_forces
 
@@ -160,8 +161,9 @@ class EntropyMaximizingCalculator(Calculator):
                 volume = atoms.get_volume()
                 entropy_stress_scaled = entropy_stress / volume
 
-                # Combine stresses
-                total_stress = base_stress - self.k_factor * entropy_stress_scaled
+                # Combine stresses (+ sign to maximize entropy)
+                # Since E = E_base - k*S, stress = dE/dstrain = base_stress + k*dS/dstrain
+                total_stress = base_stress + self.k_factor * entropy_stress_scaled
             else:
                 # No entropy contribution to stress if derivatives not available
                 total_stress = base_stress
@@ -300,31 +302,3 @@ class EntropyMaximizingCalculator(Calculator):
         atoms_copy.calc = self.base_calculator
         return atoms_copy.get_potential_energy()
 
-
-# Convenience function
-def wrap_calculator_with_entropy(calculator, k_factor=1.0, cutoff=4.0, **kwargs):
-    """
-    Convenience function to wrap any calculator with entropy maximization.
-
-    Parameters
-    ----------
-    calculator : ASE Calculator
-        The base calculator to wrap
-    k_factor : float
-        Entropy scaling factor
-    cutoff : float
-        Fingerprint cutoff radius
-    **kwargs
-        Additional arguments passed to EntropyMaximizingCalculator
-
-    Returns
-    -------
-    EntropyMaximizingCalculator
-        The wrapped calculator
-    """
-    return EntropyMaximizingCalculator(
-        calculator=calculator,
-        k_factor=k_factor,
-        cutoff=cutoff,
-        **kwargs
-    )
