@@ -116,14 +116,23 @@ class MixedCalculator(LinearCombinationCalculator):
     ----------
     calc1 : ASE-calculator
     calc2 : ASE-calculator
-    weight1 : float
-        weight for calculator 1
-    weight2 : float
-        weight for calculator 2
+    iter_max : int, optional
+        Maximum number of iterations for weight transition (default: 300)
+    comm : MPI communicator, optional
+        MPI communicator for parallel calculations
+    scheme : str, optional
+        Weight mixing scheme. Options:
+        - 'linear': w1 = t (simple linear ramp)
+        - 'cosine': w1 = 0.5*(1 - cos(π*t)) (smooth, recommended)
+        - 'smoothstep': w1 = 3t² - 2t³ (Hermite interpolation)
+        - 'smootherstep': w1 = 6t⁵ - 15t⁴ + 10t³ (smoother transition)
+        - 'sine_oscillate': original oscillatory scheme (legacy)
+        Default is 'cosine'.
     """
 
-    def __init__(self, calc1, calc2, iter_max = None, comm=None):
-        self.nonLinear_const = 3
+    VALID_SCHEMES = ('linear', 'cosine', 'smoothstep', 'smootherstep', 'sine_oscillate')
+
+    def __init__(self, calc1, calc2, iter_max=None, comm=None, scheme='cosine'):
         self.iter = 0
         self._last_positions = None
         if iter_max is not None:
@@ -132,6 +141,11 @@ class MixedCalculator(LinearCombinationCalculator):
             self.iter_max = int(iter_max)
         else:
             self.iter_max = 300
+
+        # Validate and store mixing scheme
+        if scheme not in self.VALID_SCHEMES:
+            raise ValueError(f"scheme must be one of {self.VALID_SCHEMES}, got '{scheme}'")
+        self.scheme = scheme
             
         # Store MPI communicator if provided
         self.comm = comm
@@ -151,21 +165,39 @@ class MixedCalculator(LinearCombinationCalculator):
         weight2 = self.weights[1]
         super().__init__([calc1, calc2], [weight1, weight2])
 
+    def _compute_weight(self, progress):
+        """Compute weight for calc1 based on progress (0 to 1) and scheme."""
+        t = progress
+        if self.scheme == 'linear':
+            return t
+        elif self.scheme == 'cosine':
+            # Smooth transition with zero derivative at endpoints
+            return 0.5 * (1.0 - np.cos(np.pi * t))
+        elif self.scheme == 'smoothstep':
+            # Hermite interpolation: 3t² - 2t³
+            return t * t * (3.0 - 2.0 * t)
+        elif self.scheme == 'smootherstep':
+            # Ken Perlin's improved smoothstep: 6t⁵ - 15t⁴ + 10t³
+            return t * t * t * (t * (6.0 * t - 15.0) + 10.0)
+        elif self.scheme == 'sine_oscillate':
+            # Original oscillatory scheme (legacy)
+            return 0.5 * (np.sin(-np.pi * 0.5 + np.pi * 9 * t ** 2) + 1.0)
+        else:
+            # Fallback to cosine
+            return 0.5 * (1.0 - np.cos(np.pi * t))
+
     def set_weights(self, calc1, calc2, atoms):
         """Set weights for the two calculators based on iteration number."""
         effective_iter = min(self.iter, self.iter_max)
 
         if effective_iter == 0:
-            # fmax_1 = np.amax(np.absolute(calc1.get_forces(atoms)))
-            # fmax_2 = np.amax(np.absolute(calc2.get_forces(atoms)))
-            # self.f_ratio = fmax_1 / fmax_2
             weight0 = 0.0
         elif effective_iter >= self.iter_max:
             weight0 = 1.0
         else:
-            # Smoothly ramp the contribution of calc1 from 0 to 1
+            # Compute progress from 0 to 1
             progress = effective_iter / max(self.iter_max - 1, 1)
-            weight0 = 0.5 * (np.sin(-np.pi * 0.5 + np.pi * 9 * progress ** 2) + 1.0)
+            weight0 = self._compute_weight(progress)
 
         # Ensure numerical safety and that the two weights sum to 1.0
         weight0 = float(np.clip(weight0, 0.0, 1.0))
