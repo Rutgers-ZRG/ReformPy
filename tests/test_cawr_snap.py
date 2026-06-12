@@ -20,7 +20,7 @@ def test_snap_reduces_cawr_loss():
     L1, _ = cawr_loss_grad(fp1, labels)
 
     assert L0 > 0.0
-    assert L1 < 0.5 * L0           # at least halves the loss
+    assert L1 < 0.02 * L0          # measured 0.0084 deterministic; gate at 2.4x margin
     assert len(snapped) == len(atoms)
     # original atoms untouched (snap works on a copy)
     assert not np.allclose(snapped.get_positions(), atoms.get_positions())

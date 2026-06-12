@@ -427,11 +427,25 @@ def cawr_snap(atoms, labels, cutoff=4.0, nx=300, n_iter=3, max_step=0.25):
     libfp = _import_libfp()
     atoms = atoms.copy()
     labels = np.asarray(labels)
+    prev_positions = None
+    prev_loss = np.inf
     for _ in range(int(n_iter)):
         cell = _cell_tuple_np(atoms)
         fp, dfp = libfp.get_dfp(cell, cutoff=cutoff, log=False, natx=nx)
         fp = np.asarray(fp, dtype=np.float64)
         dfp = np.asarray(dfp, dtype=np.float64)  # (nat, nat, 3, fp_dim)
+        # Monotonicity guard: if the previous step increased the loss
+        # (Gauss-Newton overshoot of the moving mu target), revert it and
+        # stop. With the default max_step clip this is rare — the clip is
+        # the primary stability mechanism; this guard makes larger steps
+        # safe too. The loss after the FINAL step is the caller's to check
+        # (cawr_reform records L_after).
+        loss, _ = cawr_loss_grad(fp, labels)
+        if loss > prev_loss:
+            atoms.set_positions(prev_positions)
+            break
+        prev_positions = atoms.get_positions()
+        prev_loss = loss
         nat, fpd = fp.shape
         resid = np.zeros_like(fp)
         sel = np.zeros(nat, dtype=bool)
