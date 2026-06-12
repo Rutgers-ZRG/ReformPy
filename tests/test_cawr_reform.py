@@ -50,3 +50,44 @@ def test_unknown_driver_raises():
     from reformpy.cawr import cawr_reform
     with pytest.raises(ValueError):
         cawr_reform(make_rocksalt(), driver='newton')
+
+
+def test_commit_is_driven_in_same_round(monkeypatch):
+    """A committed label change must be driven in the round it commits:
+    history must show the commit AND an L reduction in that same round."""
+    import reformpy.cawr as cawr_mod
+    from reformpy.cawr import ClusterState
+
+    class ForcedSplitState(ClusterState):
+        """Commits a fixed Na split on the first evaluation."""
+        def __init__(self, types, **kw):
+            super().__init__(types, **kw)
+            self._forced = False
+
+        def evaluate(self, fp):
+            fp = np.asarray(fp, dtype=np.float64)
+            self.last_committed = False
+            if not self._forced:
+                na = np.where(self.types == 11)[0]
+                new_label = int(self.labels.max()) + 1
+                self.labels[na[len(na) // 2:]] = new_label
+                self.last_committed = True
+                self._forced = True
+            from reformpy.cawr import cawr_loss_grad
+            loss, _ = cawr_loss_grad(fp, self.labels)
+            self.history.append({'L': loss, 'K': self.K_per_element(),
+                                 'committed': self.last_committed,
+                                 'labels': self.labels.copy()})
+            return self.labels
+
+    monkeypatch.setattr(cawr_mod, 'ClusterState', ForcedSplitState)
+    from reformpy.cawr import cawr_reform
+    atoms = make_rocksalt(rattle=0.05, seed=3)
+    res = cawr_reform(atoms, cutoff=CUTOFF, nx=NX, driver='fire',
+                      backend='torch', max_rounds=2, inner_steps=20)
+    # round 0: commit recorded AND the new labels were driven (L dropped)
+    assert res.history[0]['committed'] is True
+    assert res.history[0]['K'][11] == 2
+    assert res.history[0]['L_after'] < res.history[0]['L_before']
+    # the result carries the committed (split) labels
+    assert res.K_per_element[11] == 2

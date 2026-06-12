@@ -499,6 +499,11 @@ def cawr_reform(atoms, cutoff=4.0, nx=300, driver='snap', variable_cell=False,
     Note the fmax default (0.005, not ASE's customary 0.05): CAWR forces
     are O(0.01) on small cells — a larger fmax makes FIRE exit at 0 steps
     and the drive silently no-ops.
+
+    Commit headroom: each committed split/merge costs at least stability_M
+    rounds of persistence, so the maximum number of commits in one call is
+    ~ max_rounds // stability_M. Structures needing K >= 4 distinct
+    environments for one element need max_rounds raised accordingly.
     """
     if driver not in ('snap', 'fire'):
         raise ValueError(f"driver must be 'snap' or 'fire', got {driver!r}")
