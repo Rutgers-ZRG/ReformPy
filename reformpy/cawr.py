@@ -207,3 +207,139 @@ def split_is_justified(X, labels2, bic_margin=10.0, n_null=199, q=0.005,
         else:
             nulls[r] = _projected_rss_ratio(Z, sub)
     return obs < np.quantile(nulls, q, method='lower')
+
+
+# ---------------------------------------------------------------------------
+# Cluster engine
+# ---------------------------------------------------------------------------
+
+class ClusterState:
+    """Annealed-K cluster assignment engine.
+
+    Owns all "which atoms belong together" decisions. Element-blocked,
+    starts at K=1 per element. Splits and merges both route through the
+    single statistical criterion `split_is_justified` (a 2-cluster state
+    is justified iff the union passes the split test), and any proposal
+    must persist for `stability_M` consecutive evaluate() calls
+    (identified by canonical atom-index sets) before it commits. Gradient
+    consumers must use `labels` (committed) only; evaluate() is called at
+    reform-round boundaries, never inside a drive phase.
+    """
+
+    def __init__(self, types, stability_M=3, min_cluster=2, bic_margin=10.0,
+                 var_threshold=1e-4):
+        self.types = np.asarray(types)
+        self.stability_M = int(stability_M)
+        self.min_cluster = int(min_cluster)
+        self.bic_margin = float(bic_margin)
+        self.var_threshold = float(var_threshold)
+        # committed labels: one cluster per element (K=1 each)
+        self.labels = np.zeros(len(self.types), dtype=np.int64)
+        for i, t in enumerate(np.unique(self.types)):
+            self.labels[self.types == t] = i
+        self._pending_key = None
+        self._pending_count = 0
+        self._pending_apply = None
+        self.last_committed = False
+        self.history = []
+
+    def K_per_element(self):
+        return {int(t): int(len(np.unique(self.labels[self.types == t])))
+                for t in np.unique(self.types)}
+
+    # -- proposal machinery -------------------------------------------------
+
+    def _merge_proposal(self, fp):
+        """Weakest-separated close pair whose union FAILS the split
+        criterion, or None. Returns (key, apply_fn)."""
+        best = None  # (ratio, key, apply)
+        labels = self.labels
+        for t in np.unique(self.types):
+            cs = np.unique(labels[self.types == t])
+            for ai in range(len(cs)):
+                for bi in range(ai + 1, len(cs)):
+                    ia = np.where(labels == cs[ai])[0]
+                    ib = np.where(labels == cs[bi])[0]
+                    mua, mub = fp[ia].mean(0), fp[ib].mean(0)
+                    rmsa = np.sqrt(((fp[ia] - mua) ** 2).sum(1).mean())
+                    rmsb = np.sqrt(((fp[ib] - mub) ** 2).sum(1).mean())
+                    if np.linalg.norm(mua - mub) >= rmsa + rmsb:
+                        continue
+                    X = np.concatenate([fp[ia], fp[ib]])
+                    two = np.array([0] * len(ia) + [1] * len(ib))
+                    if split_is_justified(X, two, bic_margin=self.bic_margin):
+                        continue  # the 2-cluster state holds; no merge
+                    ratio = _projected_rss_ratio(X, two)
+                    key = ('merge', int(cs[ai]), int(cs[bi]))
+                    a_label, b_label = int(cs[ai]), int(cs[bi])
+
+                    def apply(a=a_label, b=b_label):
+                        self.labels[self.labels == b] = a
+
+                    if best is None or ratio > best[0]:
+                        best = (ratio, key, apply)
+        return (best[1], best[2]) if best is not None else None
+
+    def _split_proposal(self, fp):
+        """Strongest-separated justified split, or None.
+        Returns (key, apply_fn)."""
+        best = None  # (ratio, key, apply)
+        labels = self.labels
+        for c in np.unique(labels):
+            idx = np.where(labels == c)[0]
+            if len(idx) < 2 * self.min_cluster:
+                continue
+            var_c = float(((fp[idx] - fp[idx].mean(0)) ** 2).sum()) / len(idx)
+            if var_c <= self.var_threshold:
+                continue
+            sub = bisect_2means(fp[idx])
+            if sub.min() == sub.max():
+                continue
+            if min(int((sub == 0).sum()), int((sub == 1).sum())) < self.min_cluster:
+                continue
+            if not split_is_justified(fp[idx], sub, bic_margin=self.bic_margin):
+                continue
+            ratio = _projected_rss_ratio(fp[idx], sub)
+            child = frozenset(int(i) for i in idx[sub == 1])
+            key = ('split', int(c), child)
+
+            def apply(child=child):
+                new_label = int(self.labels.max()) + 1
+                for i in child:
+                    self.labels[i] = new_label
+
+            if best is None or ratio < best[0]:
+                best = (ratio, key, apply)
+        return (best[1], best[2]) if best is not None else None
+
+    def _best_proposal(self, fp):
+        """Merges first (undoing an unjustified split is more conservative
+        than making a new one), then splits."""
+        return self._merge_proposal(fp) or self._split_proposal(fp)
+
+    def evaluate(self, fp):
+        """One engine evaluation (call at round boundaries only).
+
+        Updates the pending-proposal persistence counter; commits a
+        proposal that has persisted `stability_M` consecutive evaluations.
+        Returns committed labels (always safe for gradient use).
+        """
+        fp = np.asarray(fp, dtype=np.float64)
+        self.last_committed = False
+        prop = self._best_proposal(fp)
+        if prop is None:
+            self._pending_key, self._pending_count, self._pending_apply = None, 0, None
+        elif prop[0] == self._pending_key:
+            self._pending_count += 1
+            self._pending_apply = prop[1]
+        else:
+            self._pending_key, self._pending_count, self._pending_apply = prop[0], 1, prop[1]
+        if self._pending_count >= self.stability_M and self._pending_apply is not None:
+            self._pending_apply()
+            self.last_committed = True
+            self._pending_key, self._pending_count, self._pending_apply = None, 0, None
+        loss, _ = cawr_loss_grad(fp, self.labels)
+        self.history.append({'L': loss, 'K': self.K_per_element(),
+                             'committed': self.last_committed,
+                             'labels': self.labels.copy()})
+        return self.labels
