@@ -239,8 +239,18 @@ class ClusterState:
     well-separated pairs before the gate.
     """
 
+    # Cheap skip-guard for split proposals: clusters whose per-dimension
+    # mean fp variance is below this are treated as converged and never
+    # tested. Calibrated on the gamma-B28 diagnostic (2026-06-12): orbit
+    # signal concentrates in a few of the ~100 fp dimensions, so per-dim
+    # MEAN variance of a genuinely splittable 12-atom cluster was ~5e-5 —
+    # a 1e-4 default silently vetoed statistically justified sub-splits
+    # (K stalled at 2 with the true K=8). The guard is an optimization
+    # only; the matched-null gate is the real decision-maker.
+    VAR_THRESHOLD_DEFAULT = 1e-8
+
     def __init__(self, types, stability_M=3, min_cluster=2, bic_margin=10.0,
-                 var_threshold=1e-4):
+                 var_threshold=VAR_THRESHOLD_DEFAULT):
         self.types = np.asarray(types)
         self.stability_M = int(stability_M)
         self.min_cluster = int(min_cluster)
