@@ -260,6 +260,11 @@ class ClusterState:
         return {int(t): int(len(np.unique(self.labels[self.types == t])))
                 for t in np.unique(self.types)}
 
+    @property
+    def has_pending(self):
+        """True while a split/merge proposal is accumulating persistence."""
+        return self._pending_key is not None
+
     # -- proposal machinery -------------------------------------------------
 
     def _merge_proposal(self, fp):
@@ -504,6 +509,12 @@ def cawr_reform(atoms, cutoff=4.0, nx=300, driver='snap', variable_cell=False,
     rounds of persistence, so the maximum number of commits in one call is
     ~ max_rounds // stability_M. Structures needing K >= 4 distinct
     environments for one element need max_rounds raised accordingly.
+
+    Rounds with a pending proposal do not drive: the proposal matures on a
+    static structure (committing after stability_M evaluations), because
+    driving with the not-yet-split labels would homogenize environments and
+    destroy the evidence the proposal needs to persist. Pending rounds are
+    cheap (one fingerprint evaluation, no drive).
     """
     if driver not in ('snap', 'fire'):
         raise ValueError(f"driver must be 'snap' or 'fire', got {driver!r}")
@@ -525,7 +536,15 @@ def cawr_reform(atoms, cutoff=4.0, nx=300, driver='snap', variable_cell=False,
         labels = state.evaluate(fp)
         L_before, _ = cawr_loss_grad(fp, labels)
 
-        if driver == 'snap':
+        pending = state.has_pending
+        if pending:
+            # A proposal is maturing: drive nothing this round. Driving
+            # with the current (coarser) labels homogenizes environments
+            # and destroys the very evidence the pending proposal must
+            # reproduce for stability_M consecutive evaluations
+            # (the "discovery deadlock" found by the b28 diagnostic).
+            L_after = L_before
+        elif driver == 'snap':
             atoms = cawr_snap(atoms, labels, cutoff=cutoff, nx=nx,
                               n_iter=snap_iters, max_step=max_step)
         else:
@@ -545,15 +564,17 @@ def cawr_reform(atoms, cutoff=4.0, nx=300, driver='snap', variable_cell=False,
             FIRE(target, logfile=None).run(fmax=fmax, steps=int(inner_steps))
             atoms.calc = None
 
-        fp_after = compute_fp(atoms, backend=backend, cutoff=cutoff, nx=nx)
-        L_after, _ = cawr_loss_grad(fp_after, labels)
+        if not pending:
+            fp_after = compute_fp(atoms, backend=backend, cutoff=cutoff, nx=nx)
+            L_after, _ = cawr_loss_grad(fp_after, labels)
         history.append({'round': rnd, 'L_before': L_before, 'L_after': L_after,
                         'K': state.K_per_element(),
-                        'committed': state.last_committed})
+                        'committed': state.last_committed,
+                        'pending': pending})
 
         flat = (L_before <= 0.0
                 or abs(L_after - L_before) / max(L_before, 1e-12) < tol_plateau)
-        if rnd > 0 and not state.last_committed and flat:
+        if rnd > 0 and not state.last_committed and not pending and flat:
             break
 
     return CAWRResult(atoms, state.labels.copy(), state.K_per_element(),
