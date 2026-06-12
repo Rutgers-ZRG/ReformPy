@@ -505,16 +505,14 @@ def cawr_reform(atoms, cutoff=4.0, nx=300, driver='snap', variable_cell=False,
     are O(0.01) on small cells — a larger fmax makes FIRE exit at 0 steps
     and the drive silently no-ops.
 
-    Commit headroom: each committed split/merge costs at least stability_M
-    rounds of persistence, so the maximum number of commits in one call is
-    ~ max_rounds // stability_M. Structures needing K >= 4 distinct
-    environments for one element need max_rounds raised accordingly.
-
-    Rounds with a pending proposal do not drive: the proposal matures on a
-    static structure (committing after stability_M evaluations), because
-    driving with the not-yet-split labels would homogenize environments and
-    destroy the evidence the proposal needs to persist. Pending rounds are
-    cheap (one fingerprint evaluation, no drive).
+    Each round exhausts statically-justified proposals BEFORE driving:
+    fingerprints depend only on geometry, so repeated engine evaluations
+    on the same fp array let every hierarchical split visible on the
+    current structure mature and commit (each commit costs stability_M
+    evaluations, and a commit may expose the next justified sub-split).
+    Driving first would homogenize environments and destroy the deeper
+    evidence those proposals need to persist. Static evaluations are cheap
+    (no fingerprint recompute, no drive).
     """
     if driver not in ('snap', 'fire'):
         raise ValueError(f"driver must be 'snap' or 'fire', got {driver!r}")
@@ -533,16 +531,32 @@ def cawr_reform(atoms, cutoff=4.0, nx=300, driver='snap', variable_cell=False,
 
     for rnd in range(int(max_rounds)):
         fp = compute_fp(atoms, backend=backend, cutoff=cutoff, nx=nx)
+        # Exhaust statically-justified proposals before driving: fp depends
+        # only on geometry, so every hierarchical split visible on THIS
+        # structure can mature and commit through repeated evaluations of
+        # the same fp (each commit needs stability_M evaluations; a commit
+        # may expose the next justified sub-split). Driving first would
+        # homogenize environments and destroy the deeper evidence — the
+        # "discovery deadlock" found by the b28 diagnostic.
         labels = state.evaluate(fp)
+        n_commits = 0
+        for _ in range(50 * max(int(stability_M), 1)):  # hard safety cap
+            if not (state.has_pending or state.last_committed):
+                break
+            if state.last_committed:
+                n_commits += 1
+            labels = state.evaluate(fp)
         L_before, _ = cawr_loss_grad(fp, labels)
 
         pending = state.has_pending
         if pending:
-            # A proposal is maturing: drive nothing this round. Driving
-            # with the current (coarser) labels homogenizes environments
-            # and destroys the very evidence the pending proposal must
-            # reproduce for stability_M consecutive evaluations
-            # (the "discovery deadlock" found by the b28 diagnostic).
+            # Safety net: unreachable in normal operation (pending always
+            # resolves within the exhaustion loop above). A proposal is
+            # maturing: drive nothing this round. Driving with the current
+            # (coarser) labels homogenizes environments and destroys the
+            # very evidence the pending proposal must reproduce for
+            # stability_M consecutive evaluations (the "discovery
+            # deadlock" found by the b28 diagnostic).
             L_after = L_before
         elif driver == 'snap':
             atoms = cawr_snap(atoms, labels, cutoff=cutoff, nx=nx,
@@ -570,11 +584,13 @@ def cawr_reform(atoms, cutoff=4.0, nx=300, driver='snap', variable_cell=False,
         history.append({'round': rnd, 'L_before': L_before, 'L_after': L_after,
                         'K': state.K_per_element(),
                         'committed': state.last_committed,
-                        'pending': pending})
+                        'pending': pending,
+                        'n_commits': n_commits})
 
         flat = (L_before <= 0.0
                 or abs(L_after - L_before) / max(L_before, 1e-12) < tol_plateau)
-        if rnd > 0 and not state.last_committed and not pending and flat:
+        if rnd > 0 and n_commits == 0 and not state.last_committed \
+                and not pending and flat:
             break
 
     return CAWRResult(atoms, state.labels.copy(), state.K_per_element(),
