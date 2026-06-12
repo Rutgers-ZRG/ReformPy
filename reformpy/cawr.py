@@ -224,6 +224,19 @@ class ClusterState:
     (identified by canonical atom-index sets) before it commits. Gradient
     consumers must use `labels` (committed) only; evaluate() is called at
     reform-round boundaries, never inside a drive phase.
+
+    Split-persistence semantics: a split proposal is identified by the
+    EXACT set of child atom indices and must reproduce identically for
+    stability_M consecutive evaluations. Under a moving structure this
+    means unambiguous environment groups commit readily, while borderline
+    groups (separation ~ within-spread, membership flickering by an atom)
+    may never commit — intentional conservatism: a false split poisons the
+    reform drive, a missed split merely keeps a coarser target.
+
+    Cost note: merge proposals run the Monte-Carlo gate per close pair —
+    O(K^2) worst case per element per evaluation (~15-40 ms per gate
+    call). Fine at the expected K <= 8; the rms-overlap prefilter skips
+    well-separated pairs before the gate.
     """
 
     def __init__(self, types, stability_M=3, min_cluster=2, bic_margin=10.0,
@@ -289,7 +302,8 @@ class ClusterState:
             idx = np.where(labels == c)[0]
             if len(idx) < 2 * self.min_cluster:
                 continue
-            var_c = float(((fp[idx] - fp[idx].mean(0)) ** 2).sum()) / len(idx)
+            # per-dimension mean variance, so var_threshold is fp_dim-independent
+            var_c = float(((fp[idx] - fp[idx].mean(0)) ** 2).sum()) / (len(idx) * fp.shape[1])
             if var_c <= self.var_threshold:
                 continue
             sub = bisect_2means(fp[idx])

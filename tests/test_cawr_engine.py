@@ -77,3 +77,30 @@ def test_history_records_loss_K_and_commits():
     h = st.history[0]
     assert set(h.keys()) >= {'L', 'K', 'committed', 'labels'}
     assert h['committed'] is True and h['K'][1] == 2
+
+
+def test_split_commits_under_moving_fp_when_separation_is_clear():
+    """Deployment regime: fp redrawn with fresh noise each round (moving
+    structure). A clearly separated pair of environments must still
+    produce an identical child set 3 rounds running and commit."""
+    from reformpy.cawr import ClusterState
+    types = np.ones(8, dtype=int)
+    st = ClusterState(types, stability_M=3)
+    for rnd in range(4):
+        fp = _fp_two_envs(seed=100 + rnd)  # same envs, fresh noise draw
+        st.evaluate(fp)
+    assert st.K_per_element()[1] == 2
+
+
+def test_no_merge_immediately_after_committed_split():
+    """Hysteresis: the merge gate is the negation of the split gate, so a
+    just-committed split must not be merged back on the same data."""
+    from reformpy.cawr import ClusterState
+    types = np.ones(8, dtype=int)
+    st = ClusterState(types, stability_M=1)
+    fp = _fp_two_envs(seed=0)
+    st.evaluate(fp)                       # commits the split (M=1)
+    assert st.K_per_element()[1] == 2
+    for _ in range(3):
+        st.evaluate(fp)                   # must not merge back
+    assert st.K_per_element()[1] == 2
