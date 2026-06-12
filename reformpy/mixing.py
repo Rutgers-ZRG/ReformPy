@@ -131,8 +131,33 @@ class MixedCalculator(LinearCombinationCalculator):
     """
 
     VALID_SCHEMES = ('linear', 'cosine', 'smoothstep', 'smootherstep', 'sine_oscillate')
+    VALID_MODES = ('transition', 'bias')
 
-    def __init__(self, calc1, calc2, iter_max=None, comm=None, scheme='cosine'):
+    def __init__(self, calc1, calc2, iter_max=None, comm=None, scheme='cosine',
+                 mode='transition', adaptive_lambda=False, eta=0.3,
+                 max_f_bias_rms=50.0):
+        """
+        Parameters
+        ----------
+        calc1, calc2 : ASE Calculator
+            In 'transition' mode: calc1 is target, calc2 is initial.
+            In 'bias' mode: calc1 is base (physical), calc2 is bias.
+        iter_max : int or None
+            Number of steps for weight schedule.
+        comm : MPI communicator or None
+        scheme : str
+            Weight schedule: 'linear', 'cosine', 'smoothstep', etc.
+        mode : str
+            'transition': w1 + w2 = 1, ramp from calc2 to calc1 (default).
+            'bias': E from calc1 only, F = F1 + λ(t)·F2, λ anneals to 0.
+        adaptive_lambda : bool
+            If True (bias mode only), scale λ by force-RMS ratio:
+            λ = η · |F1|_rms / |F2|_rms · schedule(t)
+        eta : float
+            Force-scale ratio for adaptive λ (default 0.3).
+        max_f_bias_rms : float
+            Safety clamp for bias forces (eV/Å, default 50.0).
+        """
         self.iter = 0
         self._last_positions = None
         if iter_max is not None:
@@ -146,7 +171,15 @@ class MixedCalculator(LinearCombinationCalculator):
         if scheme not in self.VALID_SCHEMES:
             raise ValueError(f"scheme must be one of {self.VALID_SCHEMES}, got '{scheme}'")
         self.scheme = scheme
-            
+
+        # Validate and store mode
+        if mode not in self.VALID_MODES:
+            raise ValueError(f"mode must be one of {self.VALID_MODES}, got '{mode}'")
+        self.mode = mode
+        self.adaptive_lambda = adaptive_lambda
+        self.eta = eta
+        self.max_f_bias_rms = max_f_bias_rms
+
         # Store MPI communicator if provided
         self.comm = comm
         if comm is not None:
@@ -157,7 +190,7 @@ class MixedCalculator(LinearCombinationCalculator):
             self.rank = 0
             self.size = 1
             self.parallel = False
-            
+
         self.weights = [0.0, 1.0]
         self._last_weights = tuple(self.weights)
         self._weights_changed_last_call = True
@@ -249,92 +282,186 @@ class MixedCalculator(LinearCombinationCalculator):
                  ):
         """ Calculates all the specific property for each calculator and returns
             with the summed value.
+
+        In 'transition' mode (default):
+            E = w1*E1 + w2*E2,  F = w1*F1 + w2*F2  (w1+w2=1)
+
+        In 'bias' mode:
+            E = E1 (base only),  F = F1 + λ·F2,  λ anneals to 0
+            If adaptive_lambda: λ = η · |F1|_rms / |F2|_rms · schedule(t)
+            Else: λ = schedule(t)  (schedule goes from 1 → 0)
         """
         atoms = atoms or self.atoms
         if atoms is None:
             raise ValueError("No atoms object provided to MixedCalculator")
-            
+
         # Make sure all ranks have the same atoms
         if self.parallel:
             # Wait for all processes to reach this point
             self.comm.Barrier()
-            
+
         # Update iteration counter before adjusting weights
         self._update_iteration_counter(atoms)
 
         # Set weights based on current iteration
         self.set_weights(self.calcs[0], self.calcs[1], atoms)
-        
+
         # Initialize dictionaries on all ranks
         self.results = {}
-        
+
+        if self.mode == 'bias':
+            self._calculate_bias(atoms, properties, system_changes)
+        else:
+            self._calculate_transition(atoms, properties, system_changes)
+
+        # Ensure all processes have completed the calculation
+        if self.parallel:
+            self.comm.Barrier()
+
+    def _calculate_transition(self, atoms, properties, system_changes):
+        """Original transition mode: weighted sum of both calculators."""
         # Calculate properties on all ranks for both calculators
         for i, (w, calc) in enumerate(zip(self.weights, self.calcs)):
             if w > 0.0:
-                # if self.rank == 0:
-                #     print(f"Running calculator {i+1} with weight {w}", flush=True)
-                
-                # Check if calculation is required
                 if calc.calculation_required(atoms, properties):
-                    # Calculate properties
                     try:
                         calc.calculate(atoms, properties, system_changes)
                     except Exception as e:
                         if self.rank == 0:
                             print(f"Error in calculator {i+1}: {e}", flush=True)
                         if self.parallel:
-                            self.comm.Barrier()  # Make sure all processes sync
+                            self.comm.Barrier()
                         raise
-                
-                # Synchronize after each calculator
                 if self.parallel:
                     self.comm.Barrier()
-        
+
         # Collect and combine results
         for prop in properties:
             if prop in ['energy', 'forces', 'stress']:
-                # Initialize results with zeros
                 if prop == 'energy':
                     result = 0.0
                 elif prop == 'forces':
                     result = np.zeros((len(atoms), 3), dtype=float)
                 elif prop == 'stress':
                     result = np.zeros(6, dtype=float)
-                
-                # Add weighted contributions from each calculator
+
                 for i, (w, calc) in enumerate(zip(self.weights, self.calcs)):
                     if w > 0.0:
                         if prop in calc.results:
                             result += w * calc.results[prop]
-                
-                # Store the result
+
                 self.results[prop] = result
-                
-                # Store contributions for special properties
+
                 if prop == 'energy':
                     energy_contributions = tuple(
-                        calc.results.get('energy', 0.0) if w > 0.0 else 0.0 
+                        calc.results.get('energy', 0.0) if w > 0.0 else 0.0
                         for w, calc in zip(self.weights, self.calcs)
                     )
                     self.results['energy_contributions'] = energy_contributions
                 elif prop == 'forces':
                     force_contributions = tuple(
-                        calc.results.get('forces', np.zeros((len(atoms), 3), dtype=float)) 
+                        calc.results.get('forces', np.zeros((len(atoms), 3), dtype=float))
                         if w > 0.0 else np.zeros((len(atoms), 3), dtype=float)
                         for w, calc in zip(self.weights, self.calcs)
                     )
                     self.results['force_contributions'] = force_contributions
                 elif prop == 'stress':
                     stress_contributions = tuple(
-                        calc.results.get('stress', np.zeros(6, dtype=float)) 
+                        calc.results.get('stress', np.zeros(6, dtype=float))
                         if w > 0.0 else np.zeros(6, dtype=float)
                         for w, calc in zip(self.weights, self.calcs)
                     )
                     self.results['stress_contributions'] = stress_contributions
-        
-        # Ensure all processes have completed the calculation
+
+    def _calculate_bias(self, atoms, properties, system_changes):
+        """Bias mode: E from calc1, F = F1 + λ·F2, λ anneals to 0."""
+        base_calc = self.calcs[0]  # physical PES
+        bias_calc = self.calcs[1]  # bias (Reform/entropy)
+
+        # Always run base calculator
+        if base_calc.calculation_required(atoms, properties):
+            try:
+                base_calc.calculate(atoms, properties, system_changes)
+            except Exception as e:
+                if self.rank == 0:
+                    print(f"Error in base calculator: {e}", flush=True)
+                raise
         if self.parallel:
             self.comm.Barrier()
+
+        # Compute bias schedule: how much bias remains (1 → 0)
+        effective_iter = min(self.iter, self.iter_max)
+        if self.iter_max > 0:
+            progress = effective_iter / max(self.iter_max, 1)
+            # Invert the schedule: we want bias_weight to go from 1 → 0
+            bias_schedule = 1.0 - self._compute_weight(progress)
+        else:
+            bias_schedule = 1.0
+
+        # Run bias calculator if schedule > 0 and forces/stress needed
+        need_bias = bias_schedule > 1e-10 and (
+            'forces' in properties or 'stress' in properties)
+
+        if need_bias:
+            if bias_calc.calculation_required(atoms, properties):
+                try:
+                    bias_calc.calculate(atoms, properties, system_changes)
+                except Exception as e:
+                    if self.rank == 0:
+                        print(f"Error in bias calculator: {e}", flush=True)
+                    need_bias = False
+            if self.parallel:
+                self.comm.Barrier()
+
+        # Energy: always from base only
+        if 'energy' in properties:
+            self.results['energy'] = base_calc.results.get('energy', 0.0)
+            self.results['energy_contributions'] = (
+                base_calc.results.get('energy', 0.0),
+                bias_calc.results.get('energy', 0.0) if need_bias else 0.0
+            )
+
+        # Forces: F_base + λ · F_bias
+        if 'forces' in properties:
+            f_base = base_calc.results.get(
+                'forces', np.zeros((len(atoms), 3), dtype=float))
+            if need_bias and 'forces' in bias_calc.results:
+                f_bias = bias_calc.results['forces'].copy()
+
+                # Safety clamp
+                f_bias_rms = np.sqrt(np.mean(f_bias ** 2)) + 1e-30
+                if f_bias_rms > self.max_f_bias_rms:
+                    f_bias *= self.max_f_bias_rms / f_bias_rms
+                    f_bias_rms = self.max_f_bias_rms
+
+                # Compute λ
+                if self.adaptive_lambda:
+                    f_base_rms = np.sqrt(np.mean(f_base ** 2)) + 1e-30
+                    lam = self.eta * f_base_rms / f_bias_rms * bias_schedule
+                else:
+                    lam = bias_schedule
+
+                self.results['forces'] = f_base + lam * f_bias
+                self.results['lambda'] = lam
+            else:
+                self.results['forces'] = f_base
+                self.results['lambda'] = 0.0
+
+            self.results['force_contributions'] = (
+                f_base,
+                bias_calc.results.get('forces', np.zeros((len(atoms), 3), dtype=float))
+                if need_bias else np.zeros((len(atoms), 3), dtype=float)
+            )
+
+        # Stress: from base only (bias stress not mixed — same as CAWR)
+        if 'stress' in properties:
+            self.results['stress'] = base_calc.results.get(
+                'stress', np.zeros(6, dtype=float))
+            self.results['stress_contributions'] = (
+                base_calc.results.get('stress', np.zeros(6, dtype=float)),
+                bias_calc.results.get('stress', np.zeros(6, dtype=float))
+                if need_bias else np.zeros(6, dtype=float)
+            )
 
     def reset(self):
         """Reset calculators and internal mixing state."""
