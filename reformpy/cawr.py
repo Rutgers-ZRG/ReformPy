@@ -467,3 +467,89 @@ def cawr_snap(atoms, labels, cutoff=4.0, nx=300, n_iter=3, max_step=0.25):
         scale = np.minimum(1.0, max_step / np.maximum(norms, 1e-12))
         atoms.set_positions(atoms.get_positions() + dx * scale[:, None])
     return atoms
+
+
+# ---------------------------------------------------------------------------
+# Outer reform loop
+# ---------------------------------------------------------------------------
+
+class CAWRResult:
+    """Result of cawr_reform: reformed atoms + diagnostics."""
+
+    def __init__(self, atoms, labels, K_per_element, history):
+        self.atoms = atoms
+        self.labels = labels
+        self.K_per_element = K_per_element
+        self.history = history
+
+
+def cawr_reform(atoms, cutoff=4.0, nx=300, driver='snap', variable_cell=False,
+                backend='auto', max_rounds=10, stability_M=3,
+                inner_steps=30, fmax=0.005, max_step=0.25, snap_iters=3,
+                tol_plateau=0.02):
+    """Annealed-K CAWR reform (potential-free).
+
+    Per round: compute FPs -> engine evaluation (gated labels) -> drive
+    (snap or FIRE) -> terminate when a round commits no proposal AND the
+    loss is flat. The engine evaluates ONLY at round boundaries — this
+    loop is the single owner of engine evaluations (the per-round
+    CAWRCalculator is given the shared state but its refresh_labels is
+    never called); labels are frozen during drives.
+
+    Note the fmax default (0.005, not ASE's customary 0.05): CAWR forces
+    are O(0.01) on small cells — a larger fmax makes FIRE exit at 0 steps
+    and the drive silently no-ops.
+    """
+    if driver not in ('snap', 'fire'):
+        raise ValueError(f"driver must be 'snap' or 'fire', got {driver!r}")
+    if variable_cell and driver == 'snap':
+        raise ValueError("snap is positions-only: variable_cell=True "
+                         "requires driver='fire'")
+    backend = resolve_backend(backend, variable_cell)
+    if driver == 'snap' and backend == 'torch':
+        raise ValueError("driver='snap' uses the libfp analytic Jacobian "
+                         "(backend='libfp'); use driver='fire' with the "
+                         "torch backend")
+
+    atoms = atoms.copy()
+    state = ClusterState(atoms.get_atomic_numbers(), stability_M=stability_M)
+    history = []
+
+    for rnd in range(int(max_rounds)):
+        fp = compute_fp(atoms, backend=backend, cutoff=cutoff, nx=nx)
+        labels = state.evaluate(fp)
+        L_before, _ = cawr_loss_grad(fp, labels)
+
+        if driver == 'snap':
+            atoms = cawr_snap(atoms, labels, cutoff=cutoff, nx=nx,
+                              n_iter=snap_iters, max_step=max_step)
+        else:
+            from ase.optimize import FIRE
+            from reformpy.cawr_calculator import CAWRCalculator
+            calc = CAWRCalculator(cutoff=cutoff, nx=nx, backend=backend,
+                                  state=state)
+            atoms.calc = calc
+            if variable_cell:
+                try:
+                    from ase.filters import FrechetCellFilter as CellFilter
+                except ImportError:
+                    from ase.constraints import ExpCellFilter as CellFilter
+                target = CellFilter(atoms)
+            else:
+                target = atoms
+            FIRE(target, logfile=None).run(fmax=fmax, steps=int(inner_steps))
+            atoms.calc = None
+
+        fp_after = compute_fp(atoms, backend=backend, cutoff=cutoff, nx=nx)
+        L_after, _ = cawr_loss_grad(fp_after, labels)
+        history.append({'round': rnd, 'L_before': L_before, 'L_after': L_after,
+                        'K': state.K_per_element(),
+                        'committed': state.last_committed})
+
+        flat = (L_before <= 0.0
+                or abs(L_after - L_before) / max(L_before, 1e-12) < tol_plateau)
+        if rnd > 0 and not state.last_committed and flat:
+            break
+
+    return CAWRResult(atoms, state.labels.copy(), state.K_per_element(),
+                      history)
