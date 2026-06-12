@@ -4,7 +4,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from conftest import make_rocksalt, make_sheared_rocksalt
+from conftest import make_sheared_rocksalt
 
 CUTOFF, NX = 4.0, 64
 VOIGT_IDX = [(0, 0), (1, 1), (2, 2), (1, 2), (0, 2), (0, 1)]
