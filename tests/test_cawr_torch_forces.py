@@ -30,7 +30,7 @@ def test_torch_forces_match_fd():
         ep, _, _ = cawr_efs_torch(ap, labels, cutoff=CUTOFF, nx=NX)
         em, _, _ = cawr_efs_torch(am, labels, cutoff=CUTOFF, nx=NX)
         fd_force = -(ep - em) / (2 * h)
-        assert forces[i, k] == pytest.approx(fd_force, abs=1e-6)
+        assert forces[i, k] == pytest.approx(fd_force, abs=1e-9)
 
 
 def test_torch_forces_zero_for_all_singletons():

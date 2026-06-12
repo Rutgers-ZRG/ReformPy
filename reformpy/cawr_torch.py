@@ -1,7 +1,7 @@
 """Torch backend for CAWR: autograd energy, forces, and stress.
 
 Uses the vendored reformpy.torch_fplib. Conventions (CRISP-validated):
-row-vector cells, lat' = lat @ (I + eps), sigma_v = (1/V) dL/deps[a, b]
+row-vector cells, lat' = lat0 @ (I + eps), sigma_v = (1/V) dL/deps[a, b]
 extracted per single Voigt component — dL/deps is NOT symmetric; never
 symmetrize or double off-diagonal strains (factor-of-4 bug).
 
@@ -31,7 +31,7 @@ def cell_tuple(atoms):
 def _cawr_loss_torch(fp, labels):
     """Within-cluster variance loss in torch; labels are constants."""
     labels = np.asarray(labels)
-    L = fp.new_zeros(())
+    L = fp.new_zeros(())  # seed from fp (tensor, requires_grad=False) — the all-singleton early return in cawr_efs_torch relies on this staying a constant
     for c in np.unique(labels):
         idx = np.where(labels == c)[0]
         if len(idx) < 2:
@@ -65,7 +65,7 @@ def cawr_efs_torch(atoms, labels, cutoff=4.0, nx=300, compute_stress=False):
     wanted = [spos, strain] if compute_stress else [spos]
     grads = torch.autograd.grad(L, wanted)
     g_spos = grads[0]
-    # r = s @ lat  =>  grad_s = grad_r @ lat^T  =>  grad_r = grad_s @ inv(lat)^T
+    # r = s @ lat  =>  grad_s = grad_r @ lat^T  =>  grad_r = grad_s @ inv(lat0)^T
     forces = -(g_spos @ torch.linalg.inv(lat0).T).detach().numpy()
     energy = float(L.detach())
     stress = None
