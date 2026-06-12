@@ -19,3 +19,9 @@ except ImportError as _exc:
         "dependencies (e.g. mpi4py, libfp) to use them.".format(_exc),
         stacklevel=2,
     )
+
+# CAWR (annealed-K reform) — numpy/ASE only at import time; FP backends
+# (libfp or reformpy[torch]) are imported lazily inside the functions.
+from reformpy.cawr import cawr_reform, cawr_snap, ClusterState
+from reformpy.cawr_calculator import CAWRCalculator
+__all__ += ['cawr_reform', 'cawr_snap', 'ClusterState', 'CAWRCalculator']
