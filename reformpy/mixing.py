@@ -2,11 +2,18 @@ import numpy as np
 
 from ase.calculators.calculator import Calculator, all_changes
 from ase.calculators.calculator import PropertyNotImplementedError
-from mpi4py import MPI
 from ase.parallel import world
 
-comm = MPI.COMM_WORLD
-rank = comm.Get_rank()
+try:
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+except ImportError:
+    # Serial fallback: the calculators below fully support comm=None
+    # (rank 0, no barriers); mpi4py is only required for parallel runs.
+    MPI = None
+    comm = None
+    rank = 0
 
 
 class LinearCombinationCalculator(Calculator):
