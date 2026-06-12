@@ -3,18 +3,9 @@ import numpy as np
 import pytest
 
 from conftest import make_rocksalt, import_libfp_or_skip
+from reformpy.cawr import _cell_tuple_np
 
 CUTOFF, NX = 4.0, 64
-
-
-def _cell_tuple_np(atoms):
-    z = atoms.get_atomic_numbers()
-    uniq = sorted(set(int(zz) for zz in z))
-    types = np.array([uniq.index(int(zz)) + 1 for zz in z], dtype=np.int32)
-    znucl = np.array(uniq, dtype=np.int32)
-    lat = np.array(atoms.cell[:], dtype=np.float64)
-    pos = np.array(atoms.get_positions(), dtype=np.float64)
-    return lat, pos, types, znucl
 
 
 def test_libfp_chain_rule_forces_match_fd():

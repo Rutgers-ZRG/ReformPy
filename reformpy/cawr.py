@@ -357,3 +357,99 @@ class ClusterState:
                              'committed': self.last_committed,
                              'labels': self.labels.copy()})
         return self.labels
+
+
+# ---------------------------------------------------------------------------
+# FP backends (module-level helpers) and snap driver
+# ---------------------------------------------------------------------------
+
+def _import_libfp():
+    try:
+        import libfp
+        return libfp
+    except ImportError:
+        from reformpy import libfppy as libfp  # needs numba
+        return libfp
+
+
+def _cell_tuple_np(atoms):
+    """ASE Atoms -> (lat, rxyz, types, znucl) with libfp dtypes."""
+    z = atoms.get_atomic_numbers()
+    uniq = sorted(set(int(zz) for zz in z))
+    types = np.array([uniq.index(int(zz)) + 1 for zz in z], dtype=np.int32)
+    znucl = np.array(uniq, dtype=np.int32)
+    lat = np.array(atoms.cell[:], dtype=np.float64)
+    rxyz = np.array(atoms.get_positions(), dtype=np.float64)
+    return lat, rxyz, types, znucl
+
+
+def resolve_backend(backend, variable_cell):
+    """'auto' -> libfp if importable and fixed-cell, else torch.
+    Backends are never mixed within a run."""
+    if backend not in ('auto', 'libfp', 'torch'):
+        raise ValueError(f"backend must be auto|libfp|torch, got {backend!r}")
+    if variable_cell:
+        if backend == 'libfp':
+            raise ValueError("variable_cell requires backend='torch' "
+                             "(libfp backend offers no stress)")
+        return 'torch'
+    if backend != 'auto':
+        return backend
+    try:
+        _import_libfp()
+        return 'libfp'
+    except ImportError:
+        return 'torch'
+
+
+def compute_fp(atoms, backend='auto', cutoff=4.0, nx=300):
+    """Per-atom fingerprints as a (nat, fp_dim) ndarray."""
+    backend = resolve_backend(backend, variable_cell=False)
+    if backend == 'libfp':
+        libfp = _import_libfp()
+        fp = libfp.get_lfp(_cell_tuple_np(atoms), cutoff=cutoff, log=False, natx=nx)
+        return np.asarray(fp, dtype=np.float64)
+    from reformpy.cawr_torch import cell_tuple
+    from reformpy import torch_fplib
+    lat, pos, types, znucl = cell_tuple(atoms)
+    return torch_fplib.get_lfp((lat, pos, types, znucl),
+                               cutoff=cutoff, natx=nx).numpy()
+
+
+def cawr_snap(atoms, labels, cutoff=4.0, nx=300, n_iter=3, max_step=0.25):
+    """Least-squares Newton step in fingerprint space (positions only).
+
+    Solves the stacked linear system J . dr = (mu_c - fp_i) over all
+    non-singleton atoms, clips per-atom |dr| to max_step (Angstrom), and
+    iterates n_iter times recomputing fp and J. Zero potential calls.
+    Returns a modified COPY of atoms.
+    """
+    libfp = _import_libfp()
+    atoms = atoms.copy()
+    labels = np.asarray(labels)
+    for _ in range(int(n_iter)):
+        cell = _cell_tuple_np(atoms)
+        fp, dfp = libfp.get_dfp(cell, cutoff=cutoff, log=False, natx=nx)
+        fp = np.asarray(fp, dtype=np.float64)
+        dfp = np.asarray(dfp, dtype=np.float64)  # (nat, nat, 3, fp_dim)
+        nat, fpd = fp.shape
+        resid = np.zeros_like(fp)
+        sel = np.zeros(nat, dtype=bool)
+        for c in np.unique(labels):
+            idx = np.where(labels == c)[0]
+            if len(idx) < 2:
+                continue
+            resid[idx] = fp[idx].mean(axis=0) - fp[idx]
+            sel[idx] = True
+        if not sel.any():
+            break
+        # rows (i, m), cols (j, k):  A[(i,m),(j,k)] = dfp[i, j, k, m]
+        ns = int(sel.sum())
+        A = dfp[sel].transpose(0, 3, 1, 2).reshape(ns * fpd, nat * 3)
+        b = resid[sel].reshape(-1)
+        dx, *_ = np.linalg.lstsq(A, b, rcond=None)
+        dx = dx.reshape(nat, 3)
+        norms = np.linalg.norm(dx, axis=1)
+        scale = np.minimum(1.0, max_step / np.maximum(norms, 1e-12))
+        atoms.set_positions(atoms.get_positions() + dx * scale[:, None])
+    return atoms
