@@ -12,6 +12,11 @@ setup(
         'libfp>=3.1.2',
         'mpi4py>=3.1.0,<4.0',
     ],
+    extras_require={
+        # Optional PyTorch GOM-fingerprint backend (vendored as
+        # reformpy.torch_fplib). Enables autograd/GPU fingerprint workflows.
+        'torch': ['torch>=2.0'],
+    },
     author="Zhu Research Group",
     author_email="li.zhu@rutgers.edu",
     description="Rational Exploration of Fingerprint-Oriented Relaxation Methodology",
