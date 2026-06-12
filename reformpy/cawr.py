@@ -66,3 +66,56 @@ def get_ef_clustered(fp, dfp, labels):
     forces = -np.einsum("im,ijkm->jk", dL_dfp, dfp, optimize=True)
     forces -= forces.mean(axis=0)  # translational invariance
     return energy, forces
+
+
+# ---------------------------------------------------------------------------
+# Deterministic 2-means and BIC (no sklearn dependency)
+# ---------------------------------------------------------------------------
+
+def bisect_2means(X, max_iter=100):
+    """Deterministic 2-means: init by sign of projection onto the first
+    principal component (sign fixed), then Lloyd iterations.
+
+    Returns labels in {0, 1}. Fully reproducible: no RNG.
+    """
+    X = np.asarray(X, dtype=np.float64)
+    Xc = X - X.mean(axis=0)
+    _, _, vt = np.linalg.svd(Xc, full_matrices=False)
+    d = vt[0]
+    if d[int(np.argmax(np.abs(d)))] < 0:
+        d = -d
+    proj = Xc @ d
+    labels = (proj > 0).astype(int)
+    if labels.min() == labels.max():
+        labels = (proj > np.median(proj)).astype(int)
+    for _ in range(max_iter):
+        if labels.min() == labels.max():
+            break
+        c0 = X[labels == 0].mean(axis=0)
+        c1 = X[labels == 1].mean(axis=0)
+        new = (np.linalg.norm(X - c1, axis=1)
+               < np.linalg.norm(X - c0, axis=1)).astype(int)
+        if new.min() == new.max() or np.array_equal(new, labels):
+            break
+        labels = new
+    return labels
+
+
+def bic_spherical(X, labels):
+    """BIC of a hard-assignment spherical Gaussian mixture (shared σ²).
+
+    Lower is better. Used to gate cluster splits (2-component BIC must
+    beat 1-component by a margin) and merges (the reverse).
+    """
+    X = np.asarray(X, dtype=np.float64)
+    n, d = X.shape
+    uniq = np.unique(labels)
+    k = len(uniq)
+    rss = 0.0
+    for c in uniq:
+        xc = X[np.asarray(labels) == c]
+        rss += float(((xc - xc.mean(axis=0)) ** 2).sum())
+    sigma2 = max(rss / (n * d), 1e-12)
+    loglik = -0.5 * n * d * (np.log(2 * np.pi * sigma2) + 1.0)
+    n_params = k * d + 1 + (k - 1)  # means + shared variance + mixing weights
+    return -2.0 * loglik + n_params * np.log(n)
