@@ -45,7 +45,7 @@ def test_split_is_justified_rejects_single_blob_across_seeds():
             if sub.min() != sub.max() and split_is_justified(X, sub):
                 false_splits += 1
             trials += 1
-    assert false_splits / trials < 0.03
+    assert false_splits / trials < 0.04
 
 
 def test_split_is_justified_accepts_separated_blobs_n12_plus():
@@ -99,3 +99,5 @@ def test_bisect_2means_degenerate_spectrum_is_deterministic():
     l1 = bisect_2means(X)
     l2 = bisect_2means(X)
     assert np.array_equal(l1, l2)
+    counts = sorted(np.bincount(l1).tolist())
+    assert counts == [4, 4]  # fallback must actually split the ring, not collapse

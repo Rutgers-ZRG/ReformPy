@@ -174,15 +174,19 @@ def split_is_justified(X, labels2, bic_margin=10.0, n_null=199, q=0.005,
         split direction adversarially.
 
     Deterministic: the null replicates use a fixed RNG seed. False-split
-    rate is ~q by construction across all (n, d); small clusters (n<~8)
+    rate is exactly floor(q*(n_null+1))/(n_null+1) per test under the
+    Gaussian null (rank test; q=0.005, n_null=199 -> 1/200) across all
+    (n, d); small clusters (n<~8)
     split only under extreme separation — intentional asymmetry, since a
     false split poisons the reform drive while a missed split merely keeps
     a coarser symmetrization target.
     """
     X = np.asarray(X, dtype=np.float64)
     labels2 = np.asarray(labels2)
-    if labels2.min() == labels2.max():
+    uniq = np.unique(labels2)
+    if len(uniq) != 2:
         return False
+    labels2 = (labels2 == uniq[1]).astype(int)
     one = np.zeros(len(X), dtype=int)
     if bic_spherical(X, one) - bic_spherical(X, labels2) <= bic_margin:
         return False
@@ -202,4 +206,4 @@ def split_is_justified(X, labels2, bic_margin=10.0, n_null=199, q=0.005,
             nulls[r] = 1.0
         else:
             nulls[r] = _projected_rss_ratio(Z, sub)
-    return obs < np.quantile(nulls, q)
+    return obs < np.quantile(nulls, q, method='lower')
