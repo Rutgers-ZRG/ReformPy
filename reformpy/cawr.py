@@ -5,7 +5,11 @@ their fingerprint environments (starting from K=1 per element, splitting
 or merging only when statistically justified and stable), and drive
 same-cluster atoms toward identical environments.
 
-Design doc: docs/superpowers/specs/2026-06-11-cawr-annealed-k-design.md
+CAWR's honest claim is FP-native structure reform for potential-free /
+pre-DFT contexts (cleanup of perturbed or random structures before
+expensive relaxation) — when a good potential is available, plain
+relaxation symmetrizes at least as well at matched budget.
+
 This module is numpy-only (no torch, no mpi4py). The torch backend lives
 in reformpy.cawr_torch; the ASE wrapper in reformpy.cawr_calculator.
 """
