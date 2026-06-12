@@ -13,6 +13,13 @@ from reformpy.cawr import (ClusterState, compute_fp, resolve_backend,
 
 
 class CAWRCalculator(Calculator):
+    """ASE calculator whose energy is the CAWR loss under frozen labels.
+
+    Exactly one component may run engine evaluations (refresh_labels) per
+    reform round; sharing a ClusterState between multiple evaluators
+    corrupts the stability_M persistence semantics.
+    """
+
     implemented_properties = ['energy', 'forces', 'stress']
 
     def __init__(self, cutoff=4.0, nx=300, backend='auto',
@@ -34,6 +41,8 @@ class CAWRCalculator(Calculator):
 
     @property
     def labels(self):
+        """Committed labels; the only accessor that does NOT lazily create
+        the state."""
         if self.state is None:
             raise RuntimeError("no labels yet: run a calculation or "
                                "refresh_labels() first")
@@ -44,7 +53,13 @@ class CAWRCalculator(Calculator):
         state = self._ensure_state(atoms)
         fp = compute_fp(atoms, backend=self.backend,
                         cutoff=self.cutoff, nx=self.nx)
-        return state.evaluate(fp)
+        labels = state.evaluate(fp)
+        if state.last_committed:
+            # Labels changed without the atoms changing: ASE's results
+            # cache would otherwise serve stale energy/forces (check_state
+            # only detects atomic/cell changes).
+            self.results = {}
+        return labels
 
     # -- ASE interface ---------------------------------------------------
 

@@ -58,3 +58,27 @@ def test_libfp_backend_stress_raises():
     atoms.get_potential_energy()  # fine
     with pytest.raises(NotImplementedError):
         atoms.get_stress()
+
+
+def test_label_commit_invalidates_cache():
+    """refresh_labels() committing a label change must invalidate ASE's
+    results cache even though the atoms did not move."""
+    from reformpy.cawr import ClusterState
+    from reformpy.cawr_calculator import CAWRCalculator
+    atoms = make_rocksalt(rattle=0.02)
+    z = atoms.get_atomic_numbers()
+    state = ClusterState(z, stability_M=1)
+    # Pre-split Na into two artificial clusters; the actual fp environment
+    # is one tight blob, so the next engine evaluation merges them (a
+    # committed label change without any atomic motion).
+    na = np.where(z == 11)[0]
+    state.labels = state.labels.copy()
+    state.labels[na[2:]] = state.labels.max() + 1
+    calc = CAWRCalculator(cutoff=CUTOFF, nx=NX, backend='torch', state=state)
+    atoms.calc = calc
+    e0 = atoms.get_potential_energy()
+    labels0 = calc.labels.copy()
+    calc.refresh_labels(atoms)
+    assert not np.array_equal(calc.labels, labels0)  # the merge committed
+    e1 = atoms.get_potential_energy()                # atoms unchanged
+    assert e1 != pytest.approx(e0)
