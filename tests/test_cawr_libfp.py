@@ -35,13 +35,13 @@ def test_libfp_chain_rule_forces_match_fd():
 
     h = 1e-5
     pos0 = atoms.get_positions()
-    for (i, k) in [(0, 0), (4, 1), (7, 2)]:
+    for (i, k) in [(0, 0), (3, 1), (4, 1), (7, 2)]:
         ap = atoms.copy(); p = pos0.copy(); p[i, k] += h; ap.set_positions(p)
         am = atoms.copy(); p = pos0.copy(); p[i, k] -= h; am.set_positions(p)
         ep = get_fpe_clustered(fp_of(ap), labels)
         em = get_fpe_clustered(fp_of(am), labels)
         fd_force = -(ep - em) / (2 * h)
-        assert forces[i, k] == pytest.approx(fd_force, abs=1e-5)
+        assert forces[i, k] == pytest.approx(fd_force, abs=1e-9)
 
 
 def test_libfp_and_torch_fplib_fingerprints_agree():
